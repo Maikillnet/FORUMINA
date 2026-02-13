@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #0d1117;
+  --bg-block: #161b22;
+  --text-primary: #ffffff;
+  --color-accent: #10b981;
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-thin-purple {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(168, 85, 247, 0.3) transparent;
+  }
+  .scrollbar-thin-purple::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin-purple::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin-purple::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.3);
+    border-radius: 3px;
+  }
+  .scrollbar-comments {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(168, 85, 247, 0.2) transparent;
+  }
+  .scrollbar-comments::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-comments::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-comments::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.2);
+    border-radius: 2px;
+  }
+}
+
+.prose-emerald { word-break: break-all; }
+.prose-emerald p { @apply text-[#c9d1d9] mb-3; }
+.prose-emerald strong { @apply font-bold; color: var(--color-accent); }
+.prose-emerald code { background-color: var(--bg-main); color: var(--color-accent); @apply px-1.5 py-0.5 rounded text-sm border border-[#30363d]; }
+.prose-emerald pre { background-color: var(--bg-main); @apply p-4 rounded-lg border border-[#30363d] overflow-x-auto my-4; }
+.prose-emerald pre code { @apply bg-transparent p-0 border-0; }
+.prose-emerald ul { @apply list-disc pl-6 space-y-1 my-3; }
+.prose-emerald a { color: var(--color-accent); @apply hover:underline; }

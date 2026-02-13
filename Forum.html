@@ -1,0 +1,613 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, MessageSquare, Bell, User, Github, Globe, Code, Cpu, Terminal, 
+  Briefcase, Shield, Hash, Menu, ChevronRight, MessageCircle, 
+  TrendingUp, Star, Filter, MoreHorizontal, MessageSquarePlus, Zap, Lock,
+  FileText, ExternalLink, ChevronDown, Award, Crown, X, ArrowUp, ArrowDown,
+  ChevronLeft, Send, CheckCircle, Eye
+} from 'lucide-react';
+
+// --- Конфигурация темы ---
+const theme = {
+  bg: 'bg-[#0d1117]',
+  card: 'bg-[#161b22]',
+  cardHover: 'hover:bg-[#1c2128]',
+  border: 'border-[#30363d]',
+  accent: 'text-emerald-400',
+  accentBg: 'bg-emerald-500',
+  textMain: 'text-[#c9d1d9]',
+  textDim: 'text-[#8b949e]',
+  textHeader: 'text-[#f0f6fc]'
+};
+
+// --- Данные ---
+const INITIAL_POSTS = [
+  { id: 1, title: 'Архитектура микросервисов на Go: лучшие практики 2024', author: 'gopher_pro', rank: 'Legend', color: 'text-orange-400', replies: 124, views: '12k', time: '10 мин. назад', lastUser: 'koder', isHot: true, category: 'Backend' },
+  { id: 2, title: 'Почему мы перешли с React на Svelte и не пожалели', author: 'frontend_ninja', rank: 'Team', color: 'text-blue-400', replies: 89, views: '5.4k', time: '1 час назад', lastUser: 'user_x', isPinned: true, category: 'Frontend' },
+  { id: 3, title: 'Безопасность Kubernetes: как закрыть дыры в CI/CD', author: 'sec_guy', rank: 'Guru', color: 'text-purple-400', replies: 45, views: '2.1k', time: '3 часа назад', lastUser: 'devops_king', category: 'DevOps' },
+  { id: 4, title: 'Обзор новых фич TypeScript 5.4', author: 'ts_fan', rank: 'User', color: 'text-slate-400', replies: 12, views: '800', time: '5 часов назад', lastUser: 'junior_1', category: 'Languages' },
+];
+
+const CATEGORIES = [
+  { id: 'all', name: 'Все темы', icon: <MessageSquare size={16} /> },
+  { id: 'dev', name: 'Разработка', icon: <Code size={16} /> },
+  { id: 'sec', name: 'Безопасность', icon: <Shield size={16} /> },
+  { id: 'sys', name: 'Администрирование', icon: <Terminal size={16} /> },
+  { id: 'career', name: 'Карьера', icon: <Briefcase size={16} /> },
+];
+
+const TOP_NAV = [
+  { id: 'forum', name: 'Форум' },
+  { id: 'articles', name: 'Статьи' },
+  { id: 'rules', name: 'Правила' },
+  { id: 'premium', name: 'Premium', color: 'text-emerald-500' },
+];
+
+// --- Компоненты ---
+
+const UserBanner = ({ rank, color }) => (
+  <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded-sm bg-opacity-10 border border-current ${color} flex items-center gap-1`}>
+    {rank === 'Legend' && <Crown size={8}/>}
+    {rank}
+  </span>
+);
+
+export default function App() {
+  const [view, setView] = useState('feed'); // feed, thread, editor, profile
+  const [activeNav, setActiveNav] = useState('forum');
+  const [activeTab, setActiveTab] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('new');
+  const [selectedThread, setSelectedThread] = useState(null);
+  const [isLogged, setIsLogged] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [votes, setVotes] = useState({});
+
+  const handleVote = (id, type, e) => {
+    e.stopPropagation();
+    setVotes(prev => ({
+      ...prev,
+      [id]: prev[id] === type ? null : type
+    }));
+  };
+
+  const openThread = (thread) => {
+    setSelectedThread(thread);
+    setView('thread');
+    window.scrollTo(0, 0);
+  };
+
+  const getCategoryName = (id) => {
+    const cat = CATEGORIES.find(c => c.id === id);
+    return cat ? cat.name : 'Форум';
+  };
+
+  return (
+    <div className={`min-h-screen ${theme.bg} ${theme.textMain} font-sans selection:bg-emerald-500/30`}>
+      
+      {/* Top Bar */}
+      <div className={`h-9 bg-[#010409] border-b ${theme.border} hidden lg:block`}>
+        <div className="max-w-[1400px] mx-auto px-6 h-full flex items-center justify-between text-[11px] font-bold text-[#8b949e]">
+          <div className="flex gap-6 uppercase tracking-wider h-full">
+            {TOP_NAV.map(item => (
+              <button 
+                key={item.id}
+                onClick={() => { setActiveNav(item.id); setView('feed'); }}
+                className={`transition-colors h-full px-1 border-b-2 ${activeNav === item.id ? 'text-white border-emerald-500' : 'border-transparent hover:text-white'}`}
+              >
+                <span className={item.color || ''}>{item.name}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-4">
+            <span className="flex items-center gap-1"><Zap size={12} className="text-emerald-500"/> Онлайн: 8,421</span>
+            <span className="text-[#30363d]">|</span>
+            <span>Темы: 142,093</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-[#0d1117]/90 backdrop-blur-md border-b border-[#30363d]">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-6 h-16 flex items-center gap-6">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setView('feed'); setActiveTab('all'); setActiveNav('forum'); }}>
+             <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center text-black font-black text-xl shadow-lg shadow-emerald-500/20 group-hover:rotate-3 transition-transform">IT</div>
+             <div className="flex flex-col -space-y-1">
+                <span className="text-lg font-black tracking-tighter text-white">FORUM.LIVE</span>
+                <span className="text-[9px] text-emerald-500 font-black uppercase tracking-[2px]">Developers</span>
+             </div>
+          </div>
+
+          <div className="flex-1 max-w-xl relative hidden md:block">
+            <Search className="absolute left-3 top-2.5 text-[#484f58]" size={16} />
+            <input 
+              className="w-full bg-[#010409] border border-[#30363d] rounded-md py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-emerald-500/50 transition-all"
+              placeholder="Поиск по обсуждениям и коду..."
+            />
+          </div>
+
+          <div className="ml-auto flex items-center gap-4">
+            {!isLogged ? (
+              <div className="flex gap-2">
+                <button onClick={() => { setAuthMode('login'); setShowAuth(true); }} className="text-xs font-bold text-[#8b949e] hover:text-white px-2">ВХОД</button>
+                <button onClick={() => { setAuthMode('register'); setShowAuth(true); }} className="bg-emerald-500 text-black px-4 py-2 rounded-md font-black text-xs hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/10">РЕГИСТРАЦИЯ</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-5">
+                <button className="relative text-[#8b949e] hover:text-white transition-colors">
+                  <Bell size={20}/>
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#0d1117]"></span>
+                </button>
+                <div onClick={() => setView('profile')} className="flex items-center gap-3 cursor-pointer group">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-bold text-white group-hover:text-emerald-400">admin_dev</p>
+                    <p className="text-[9px] text-emerald-500 font-black uppercase tracking-tighter">Legend</p>
+                  </div>
+                  <div className="w-9 h-9 bg-slate-800 rounded-full border border-[#30363d] group-hover:border-emerald-500 transition-all overflow-hidden">
+                    <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=Admin" alt="avatar" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-[1400px] mx-auto px-4 md:px-6 py-6 grid grid-cols-12 gap-6">
+        
+        {/* Left Sidebar */}
+        <aside className="hidden lg:block col-span-3 xl:col-span-2 space-y-6">
+          <button 
+            onClick={() => setView('editor')}
+            className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-emerald-500 hover:text-black transition-all group"
+          >
+            <MessageSquarePlus size={18} /> СОЗДАТЬ ТЕМУ
+          </button>
+
+          <div className="space-y-1">
+            <h4 className="text-[10px] font-black text-[#484f58] uppercase tracking-[2px] px-3 mb-2">Разделы форума</h4>
+            {CATEGORIES.map(cat => (
+              <button 
+                key={cat.id}
+                onClick={() => { setActiveTab(cat.id); setView('feed'); setActiveNav('forum'); }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === cat.id && view === 'feed' && activeNav === 'forum' ? 'bg-[#1c2128] text-emerald-400' : 'text-[#8b949e] hover:bg-[#161b22] hover:text-white'}`}
+              >
+                <span className={activeTab === cat.id && view === 'feed' && activeNav === 'forum' ? 'text-emerald-400' : 'text-[#484f58]'}>{cat.icon}</span>
+                <span className="text-[13px] font-medium">{cat.name}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="p-4 bg-[#161b22] border border-[#30363d] rounded-xl">
+             <div className="flex items-center gap-2 text-white mb-3">
+                <Award size={16} className="text-yellow-500"/>
+                <span className="text-[11px] font-black uppercase">Топ авторов</span>
+             </div>
+             <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                       <div className="w-6 h-6 rounded bg-slate-800"></div>
+                       <span className="text-xs font-medium">user_{i}42</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-500 font-bold">{100 - i * 10}%</span>
+                  </div>
+                ))}
+             </div>
+          </div>
+        </aside>
+
+        {/* Content Area */}
+        <section className="col-span-12 lg:col-span-9 xl:col-span-7 space-y-5">
+          
+          {view === 'feed' && activeNav === 'forum' && (
+            <>
+              {/* Breadcrumbs */}
+              <div className="flex items-center gap-2 text-[11px] text-[#484f58] font-bold uppercase tracking-wider">
+                <button onClick={() => { setActiveTab('all'); setView('feed'); }} className="hover:text-emerald-500 transition-colors">ФОРУМ</button>
+                <ChevronRight size={12} />
+                <span className="text-emerald-500">{getCategoryName(activeTab).toUpperCase()}</span>
+              </div>
+
+              {/* Filtering Tabs */}
+              <div className="flex items-center justify-between bg-[#161b22] p-4 border border-[#30363d] rounded-xl">
+                <div className="flex gap-4 text-xs font-bold">
+                   <button 
+                    onClick={() => setActiveFilter('new')}
+                    className={`transition-colors ${activeFilter === 'new' ? 'text-emerald-400' : 'text-[#8b949e] hover:text-white'}`}
+                   >НОВЫЕ</button>
+                   <button 
+                    onClick={() => setActiveFilter('hot')}
+                    className={`transition-colors ${activeFilter === 'hot' ? 'text-emerald-400' : 'text-[#8b949e] hover:text-white'}`}
+                   >ГОРЯЧИЕ</button>
+                   <button 
+                    onClick={() => setActiveFilter('subs')}
+                    className={`transition-colors ${activeFilter === 'subs' ? 'text-emerald-400' : 'text-[#8b949e] hover:text-white'}`}
+                   >ПОДПИСКИ</button>
+                </div>
+                <button className="p-1.5 text-[#484f58] hover:text-white transition-colors"><Filter size={18}/></button>
+              </div>
+
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden divide-y divide-[#30363d]">
+                {INITIAL_POSTS
+                  .filter(post => activeTab === 'all' || post.category === getCategoryName(activeTab))
+                  .map(post => (
+                  <div 
+                    key={post.id} 
+                    onClick={() => openThread(post)}
+                    className="group p-4 flex items-center gap-4 hover:bg-[#1c2128] transition-colors cursor-pointer"
+                  >
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0 w-8">
+                       <button 
+                        onClick={(e) => handleVote(post.id, 'up', e)}
+                        className={`p-1 rounded hover:bg-[#30363d] transition-colors ${votes[post.id] === 'up' ? 'text-emerald-500' : 'text-[#484f58]'}`}
+                       >
+                         <ArrowUp size={20}/>
+                       </button>
+                       <span className="text-xs font-bold text-[#f0f6fc]">{votes[post.id] === 'up' ? 125 : votes[post.id] === 'down' ? 123 : 124}</span>
+                       <button 
+                        onClick={(e) => handleVote(post.id, 'down', e)}
+                        className={`p-1 rounded hover:bg-[#30363d] transition-colors ${votes[post.id] === 'down' ? 'text-red-500' : 'text-[#484f58]'}`}
+                       >
+                         <ArrowDown size={20}/>
+                       </button>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                       <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black uppercase text-emerald-500 bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/10">{post.category}</span>
+                          <h3 className="text-sm md:text-base font-bold text-[#f0f6fc] group-hover:text-emerald-400 transition-colors truncate">
+                            {post.title}
+                          </h3>
+                       </div>
+                       <div className="flex items-center gap-3 text-[11px] text-[#8b949e]">
+                          <span className={`font-bold ${post.color}`}>{post.author}</span>
+                          <UserBanner rank={post.rank} color={post.color} />
+                          <span>•</span>
+                          <span>{post.time}</span>
+                          <span className="flex items-center gap-1 ml-auto"><MessageSquare size={12}/> {post.replies}</span>
+                          <span className="flex items-center gap-1"><Eye size={12}/> {post.views}</span>
+                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {activeNav === 'articles' && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-8 text-center">
+              <FileText size={48} className="mx-auto text-[#484f58] mb-4" />
+              <h2 className="text-xl font-bold text-white mb-2">Статьи и гайды</h2>
+              <p className="text-sm text-[#8b949e]">Раздел находится в разработке. Здесь будут публиковаться лучшие лонгриды от нашего сообщества.</p>
+              <button onClick={() => setActiveNav('forum')} className="mt-6 bg-emerald-500 text-black px-6 py-2 rounded-lg font-bold text-xs uppercase">Вернуться на форум</button>
+            </div>
+          )}
+
+          {activeNav === 'rules' && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-8 space-y-6">
+              <h2 className="text-2xl font-black text-white italic border-b border-[#30363d] pb-4">ПРАВИЛА СООБЩЕСТВА</h2>
+              <div className="space-y-4 text-sm leading-relaxed">
+                <p className="text-emerald-400 font-bold">1. Общие положения</p>
+                <p>1.1. Будьте вежливы к коллегам по цеху. Оскорбления недопустимы.</p>
+                <p>1.2. Запрещен спам, флуд и любая несогласованная реклама.</p>
+                <p className="text-emerald-400 font-bold">2. Контент и Код</p>
+                <p>2.1. Весь выкладываемый код должен быть безопасен для пользователей.</p>
+                <p>2.2. При использовании чужого кода указывайте автора или лицензию.</p>
+              </div>
+              <button onClick={() => setActiveNav('forum')} className="w-full bg-[#30363d] text-white py-2 rounded font-bold text-xs uppercase hover:bg-emerald-500 hover:text-black transition-all">Я ознакомлен с правилами</button>
+            </div>
+          )}
+
+          {view === 'thread' && (
+            <div className="animate-in fade-in duration-300 space-y-5">
+               <button 
+                onClick={() => setView('feed')}
+                className="flex items-center gap-2 text-xs font-bold text-[#8b949e] hover:text-white mb-2 group transition-colors"
+               >
+                 <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> НАЗАД К ЛЕНТЕ
+               </button>
+
+               <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden shadow-2xl">
+                  <div className="p-6 md:p-8">
+                     <div className="flex items-center gap-3 mb-6">
+                        <div className="w-12 h-12 rounded-xl bg-slate-800 overflow-hidden">
+                           <img src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${selectedThread?.author}`} alt=""/>
+                        </div>
+                        <div>
+                           <div className="flex items-center gap-2">
+                              <h4 className={`text-sm font-bold ${selectedThread?.color}`}>{selectedThread?.author}</h4>
+                              <UserBanner rank={selectedThread?.rank} color={selectedThread?.color} />
+                           </div>
+                           <p className="text-[11px] text-[#8b949e] font-medium">{selectedThread?.time} • 240 сообщений</p>
+                        </div>
+                        <div className="ml-auto text-emerald-500">
+                           <CheckCircle size={20}/>
+                        </div>
+                     </div>
+
+                     <h1 className="text-xl md:text-2xl font-black text-white leading-tight mb-6">
+                        {selectedThread?.title}
+                     </h1>
+
+                     <div className="prose prose-invert max-w-none text-[#c9d1d9] space-y-4">
+                        <p>Приветствую сообщество! В этой теме я хотел бы разобрать фундаментальные подходы к построению отказоустойчивых систем.</p>
+                        <p>Основные тезисы:</p>
+                        <ul className="list-disc pl-5 space-y-2">
+                           <li>Принципы SOLID в распределенных системах</li>
+                           <li>Выбор протокола взаимодействия (gRPC vs REST)</li>
+                           <li>Стратегии кэширования на уровне БД</li>
+                        </ul>
+                        <div className="bg-[#0d1117] p-4 rounded-lg border border-[#30363d] font-mono text-sm text-emerald-400 overflow-x-auto">
+                           {`// Пример инициализации сервиса\nfunc initService() {\n  service := api.New(config.Load())\n  service.Run()\n}`}
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="bg-[#0d1117]/50 p-4 border-t border-[#30363d] flex items-center justify-between">
+                     <div className="flex gap-4">
+                        <button className="flex items-center gap-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors"><ArrowUp size={16}/> Лайк</button>
+                        <button className="flex items-center gap-2 text-xs font-bold text-[#8b949e] hover:text-white transition-colors"><MessageSquare size={16}/> Ответить</button>
+                     </div>
+                     <button className="text-[#8b949e] hover:text-white transition-colors"><Star size={18}/></button>
+                  </div>
+               </div>
+
+               {/* Комментарии */}
+               <div className="space-y-4">
+                  <h5 className="text-[11px] font-black text-[#484f58] uppercase tracking-widest pl-2">Комментарии (2)</h5>
+                  {[1, 2].map(i => (
+                    <div key={i} className="bg-[#161b22] border border-[#30363d] rounded-xl p-5 flex gap-4">
+                       <div className="w-10 h-10 rounded-lg bg-slate-800 flex-shrink-0"></div>
+                       <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                             <span className="text-xs font-bold text-white">user_{i}99</span>
+                             <span className="text-[10px] text-[#484f58] font-bold">15 мин. назад</span>
+                          </div>
+                          <p className="text-sm text-[#8b949e]">Отличный гайд! Особенно понравился раздел про gRPC. Жду продолжения по теме балансировки нагрузки.</p>
+                       </div>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
+          {view === 'editor' && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+               <div className="p-4 border-b border-[#30363d] bg-[#0d1117]/50 flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-widest text-white">Новое обсуждение</span>
+                  <button onClick={() => setView('feed')} className="text-[#484f58] hover:text-white transition-colors"><X size={20}/></button>
+               </div>
+               <div className="p-6 space-y-4">
+                  <input 
+                    className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-lg font-bold text-white focus:outline-none focus:border-emerald-500 transition-all"
+                    placeholder="Заголовок темы..."
+                  />
+                  <div className="flex gap-2">
+                     <select className="bg-[#0d1117] border border-[#30363d] rounded px-3 py-1.5 text-xs font-bold text-emerald-400">
+                        <option>Выбрать раздел</option>
+                        <option>Backend</option>
+                        <option>Frontend</option>
+                        <option>DevOps</option>
+                     </select>
+                     <input className="flex-1 bg-[#0d1117] border border-[#30363d] rounded px-3 py-1.5 text-xs text-[#8b949e]" placeholder="Теги (через запятую)..." />
+                  </div>
+                  <div className="border border-[#30363d] rounded-lg overflow-hidden">
+                     <div className="bg-[#21262d] p-2 flex gap-3 border-b border-[#30363d]">
+                        <button className="p-1 hover:text-white"><Code size={16}/></button>
+                        <button className="p-1 hover:text-white font-bold">B</button>
+                        <button className="p-1 hover:text-white italic">I</button>
+                        <button className="p-1 hover:text-white"><Globe size={16}/></button>
+                     </div>
+                     <textarea 
+                       className="w-full h-64 bg-[#0d1117] p-4 text-sm text-[#c9d1d9] resize-none focus:outline-none"
+                       placeholder="Напишите содержимое здесь... (Поддерживается Markdown)"
+                     ></textarea>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-2">
+                     <button onClick={() => setView('feed')} className="px-6 py-2 text-sm font-bold text-[#8b949e] hover:text-white transition-colors">ОТМЕНА</button>
+                     <button 
+                      onClick={() => { setView('feed'); setIsLogged(true); }}
+                      className="bg-emerald-500 text-black px-8 py-2 rounded-lg font-black text-xs hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+                     >
+                       ОПУБЛИКОВАТЬ
+                     </button>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {view === 'profile' && (
+             <div className="space-y-6 animate-in fade-in duration-500">
+                <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-8 relative overflow-hidden">
+                   <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-emerald-600/20 to-indigo-600/20"></div>
+                   <div className="relative z-10 flex flex-col md:flex-row items-end gap-6">
+                      <div className="w-28 h-28 rounded-2xl bg-[#0d1117] border-4 border-[#161b22] overflow-hidden shadow-2xl">
+                         <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=Admin" alt="avatar" />
+                      </div>
+                      <div className="flex-1">
+                         <h2 className="text-2xl font-black text-white">admin_dev</h2>
+                         <p className="text-emerald-500 font-bold text-sm mb-4">Senior Fullstack Engineer</p>
+                         <div className="flex gap-2">
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded font-black border border-emerald-500/20">ROOT</span>
+                            <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-1 rounded font-black border border-blue-500/20">MODERATOR</span>
+                         </div>
+                      </div>
+                      <div className="flex gap-2 mb-2">
+                         <button className="p-2 bg-[#21262d] border border-[#30363d] rounded-lg hover:text-emerald-400 transition-colors transition-all"><Settings size={20}/></button>
+                         <button onClick={() => setIsLogged(false)} className="px-5 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-xs font-black hover:bg-red-500 hover:text-white transition-all">ВЫХОД</button>
+                      </div>
+                   </div>
+
+                   <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-[#30363d] pt-8">
+                      <div className="text-center">
+                         <div className="text-xl font-black text-white">1.4k</div>
+                         <div className="text-[10px] text-[#484f58] font-bold uppercase tracking-widest">Репутация</div>
+                      </div>
+                      <div className="text-center border-l border-[#30363d]">
+                         <div className="text-xl font-black text-white">128</div>
+                         <div className="text-[10px] text-[#484f58] font-bold uppercase tracking-widest">Тем</div>
+                      </div>
+                      <div className="text-center border-l border-[#30363d]">
+                         <div className="text-xl font-black text-white">1.5k</div>
+                         <div className="text-[10px] text-[#484f58] font-bold uppercase tracking-widest">Ответов</div>
+                      </div>
+                      <div className="text-center border-l border-[#30363d]">
+                         <div className="text-xl font-black text-emerald-400">#12</div>
+                         <div className="text-[10px] text-[#484f58] font-bold uppercase tracking-widest">Рейтинг</div>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-6">
+                   <h4 className="text-xs font-black text-white uppercase tracking-widest mb-6">Активность за 2024</h4>
+                   <div className="flex flex-wrap gap-1">
+                      {[...Array(120)].map((_, i) => (
+                        <div key={i} className={`w-3 h-3 rounded-sm ${i % 15 === 0 ? 'bg-emerald-400' : i % 7 === 0 ? 'bg-emerald-700' : i % 4 === 0 ? 'bg-emerald-900' : 'bg-[#0d1117]'}`}></div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+          )}
+        </section>
+
+        {/* Right Sidebar */}
+        <aside className="hidden xl:block col-span-3 space-y-6">
+           
+           <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-5">
+              <h4 className="text-[11px] font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+                <TrendingUp size={14} className="text-emerald-500"/> Сейчас обсуждают
+              </h4>
+              <div className="space-y-4">
+                 {[1, 2, 3].map(i => (
+                    <div key={i} className="group cursor-pointer">
+                       <h5 className="text-[13px] font-bold text-[#c9d1d9] group-hover:text-emerald-400 transition-colors line-clamp-1">Патч безопасности для OpenSSL v3</h5>
+                       <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[9px] font-black text-[#484f58] uppercase">#Security</span>
+                          <span className="text-[9px] text-[#484f58]">• {i*5} мин. назад</span>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           </div>
+
+           <div className="bg-[#161b22] border border-[#30363d] rounded-xl flex flex-col h-[380px]">
+              <div className="px-4 py-3 border-b border-[#30363d] flex items-center justify-between">
+                 <span className="text-[11px] font-black text-white uppercase tracking-widest">МИНИ-ЧАТ</span>
+                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                 <div className="space-y-1">
+                    <span className="text-[10px] font-black text-blue-400">dev_guru</span>
+                    <p className="text-[12px] bg-[#0d1117] p-2 rounded-lg border border-[#30363d]">Парни, кто юзал Bun в продакшене?</p>
+                 </div>
+                 <div className="space-y-1">
+                    <span className="text-[10px] font-black text-emerald-400">admin</span>
+                    <p className="text-[12px] bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10 text-emerald-100 italic">Пока не советую, много багов с memory leaks.</p>
+                 </div>
+              </div>
+              <div className="p-3 border-t border-[#30363d] flex gap-2">
+                 <input className="flex-1 bg-[#010409] border border-[#30363d] rounded px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-500/50" placeholder="Сообщение..." />
+                 <button className="p-1.5 bg-emerald-500 text-black rounded hover:bg-emerald-400 transition-colors"><Send size={14}/></button>
+              </div>
+           </div>
+
+           <div className="flex flex-col gap-2">
+              <a href="#" className="flex items-center justify-between p-3 bg-[#161b22] border border-[#30363d] rounded-xl hover:border-emerald-500/30 transition-all group">
+                 <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400"><MessageCircle size={16}/></div>
+                    <span className="text-xs font-bold text-[#8b949e] group-hover:text-white transition-colors">Telegram Community</span>
+                 </div>
+                 <ExternalLink size={14} className="text-[#30363d] group-hover:text-emerald-400 transition-colors"/>
+              </a>
+           </div>
+        </aside>
+      </main>
+
+      {/* Auth Modal */}
+      {showAuth && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowAuth(false)}></div>
+           <div className="relative bg-[#161b22] border border-[#30363d] w-full max-w-sm rounded-2xl p-8 shadow-2xl animate-in zoom-in duration-200">
+              <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-[#484f58] hover:text-white transition-colors"><X size={20}/></button>
+              
+              <div className="text-center mb-8">
+                 <div className="w-12 h-12 bg-emerald-500 mx-auto rounded-xl flex items-center justify-center text-black font-black text-2xl mb-4 shadow-xl shadow-emerald-500/20">IT</div>
+                 <h2 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-none">{authMode === 'login' ? 'АВТОРИЗАЦИЯ' : 'РЕГИСТРАЦИЯ'}</h2>
+                 <p className="text-[10px] text-[#484f58] font-black mt-2 uppercase tracking-widest">FORUM.LIVE • DEVELOPERS</p>
+              </div>
+
+              <div className="space-y-4">
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-[#484f58] uppercase tracking-wider">Никнейм или Email</label>
+                    <div className="relative">
+                       <User className="absolute left-3 top-3.5 text-[#484f58]" size={16}/>
+                       <input className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3.5 pl-10 text-sm focus:outline-none focus:border-emerald-500 transition-all text-white" placeholder="dev_master" />
+                    </div>
+                 </div>
+                 <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                       <label className="text-[10px] font-black text-[#484f58] uppercase tracking-wider">Пароль</label>
+                    </div>
+                    <div className="relative">
+                       <Lock className="absolute left-3 top-3.5 text-[#484f58]" size={16}/>
+                       <input type="password" className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3.5 pl-10 text-sm focus:outline-none focus:border-emerald-500 transition-all text-white" placeholder="••••••••" />
+                    </div>
+                 </div>
+
+                 <button 
+                  onClick={() => { setIsLogged(true); setShowAuth(false); setView('feed'); }}
+                  className="w-full bg-emerald-500 py-4 rounded-lg font-black text-black hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20 transform active:scale-95 uppercase tracking-widest text-xs mt-4"
+                 >
+                    {authMode === 'login' ? 'ВОЙТИ В АККАУНТ' : 'СОЗДАТЬ АККАУНТ'}
+                 </button>
+              </div>
+
+              <div className="mt-8 text-center flex flex-col gap-4">
+                 <div className="flex items-center gap-2">
+                    <div className="h-px flex-1 bg-[#30363d]"></div>
+                    <span className="text-[10px] font-bold text-[#484f58] uppercase">Или через</span>
+                    <div className="h-px flex-1 bg-[#30363d]"></div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-3">
+                    <button className="flex items-center justify-center gap-2 bg-[#21262d] border border-[#30363d] py-2.5 rounded-lg text-xs font-bold hover:bg-[#30363d] transition-colors"><Github size={16}/> GitHub</button>
+                    <button className="flex items-center justify-center gap-2 bg-[#21262d] border border-[#30363d] py-2.5 rounded-lg text-xs font-bold hover:bg-[#30363d] transition-colors"><Globe size={16}/> Google</button>
+                 </div>
+                 <button 
+                  onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                  className="text-[11px] font-bold text-emerald-500 hover:text-emerald-400 transition-colors uppercase tracking-wider mt-2"
+                 >
+                   {authMode === 'login' ? 'Зарегистрироваться' : 'Уже есть аккаунт? Войти'}
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Mobile Nav */}
+      <footer className="fixed bottom-0 left-0 w-full bg-[#0d1117]/95 backdrop-blur-md border-t border-[#30363d] h-16 flex md:hidden items-center justify-around z-50 px-4">
+         <button onClick={() => { setView('feed'); setActiveNav('forum'); }} className={`flex flex-col items-center gap-1 ${view === 'feed' && activeNav === 'forum' ? 'text-emerald-400' : 'text-[#8b949e]'}`}>
+           <MessageSquare size={20}/>
+           <span className="text-[9px] font-black uppercase">Форум</span>
+         </button>
+         <button onClick={() => setView('editor')} className="bg-emerald-500 text-black p-3 rounded-xl -mt-10 shadow-xl border-4 border-[#0d1117] transition-all active:scale-90">
+           <PlusIcon size={24}/>
+         </button>
+         <button onClick={() => setView('profile')} className={`flex flex-col items-center gap-1 ${view === 'profile' ? 'text-emerald-400' : 'text-[#8b949e]'}`}>
+           <User size={20}/>
+           <span className="text-[9px] font-black uppercase">Профиль</span>
+         </button>
+      </footer>
+
+    </div>
+  );
+}
+
+// Helper components
+function PlusIcon({size, className}) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
