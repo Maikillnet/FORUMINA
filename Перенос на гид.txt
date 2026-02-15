@@ -1,0 +1,18 @@
+# 1. Настраиваем твою почту из скриншота
+git config --global user.email "Nikita12332120020921@gmail.com"
+
+# 2. Настраиваем имя (как в профиле GitHub)
+git config --global user.name "Maikillnet"
+
+# 3. Добавляем все изменения
+git add .
+
+# 4. Создаем сохранение (теперь ошибки "Author identity unknown" не будет)
+git commit -m "Final cleanup and design fixes"
+
+# 5. Проверяем связь с репозиторием FORUMINA
+git remote set-url origin https://github.com/Maikillnet/FORUMINA.git
+
+# 6. Отправляем всё на GitHub
+git branch -M main
+git push -u origin main --force

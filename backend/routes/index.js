@@ -10,6 +10,8 @@ import usersRoutes from './users.routes.js';
 import wallRoutes from './wall.routes.js';
 import trophiesRoutes from './trophies.routes.js';
 import settingsRoutes from './settings.routes.js';
+import emojisRoutes from './emojis.routes.js';
+import aiRoutes from './ai.routes.js';
 
 const router = Router();
 
@@ -24,5 +26,7 @@ router.use('/api/search', searchRoutes);
 router.use('/api/stats', statsRoutes);
 router.use('/api', trophiesRoutes);
 router.use('/api', settingsRoutes);
+router.use('/api', emojisRoutes);
+router.use('/api/ai', aiRoutes);
 
 export default router;

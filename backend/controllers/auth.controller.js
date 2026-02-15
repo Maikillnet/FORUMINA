@@ -58,5 +58,9 @@ export function me(req, res) {
   if (safe.is_admin === undefined && (safe.id === 1 || safe.username === 'admin_dev')) {
     safe.is_admin = true;
   }
+  if (safe.settings?.openai_key) {
+    safe.has_openai_key = true;
+    delete safe.settings.openai_key;
+  }
   res.json(safe);
 }

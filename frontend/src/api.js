@@ -116,10 +116,31 @@ export async function getPosts(category = 'all', filter = 'new') {
   return safeJson(res);
 }
 
-export async function getPost(id) {
-  const res = await safeFetch(`${API}/posts/${id}`, { headers: headers() });
+export async function getPost(id, skipView = false) {
+  const h = headers();
+  if (skipView) h['X-Skip-View'] = '1';
+  const url = skipView ? `${API}/posts/${id}?skip_view=1` : `${API}/posts/${id}`;
+  const res = await safeFetch(url, { headers: h });
   if (!res.ok) throw new Error('Тема не найдена');
   return safeJson(res);
+}
+
+export async function postHit(id) {
+  try {
+    const res = await safeFetch(`${API}/posts/${id}/hit`, { method: 'POST', headers: headers(), body: '{}' });
+    if (!res.ok) return;
+    await safeJson(res);
+  } catch { /* ignore */ }
+}
+
+export async function getSimilarThreads(id) {
+  const res = await safeFetch(`${API}/posts/${id}/similar`, { headers: headers() });
+  if (!res.ok) return [];
+  try {
+    return await safeJson(res);
+  } catch {
+    return [];
+  }
 }
 
 export async function getComments(postId) {
@@ -128,15 +149,41 @@ export async function getComments(postId) {
   return safeJson(res);
 }
 
-export async function createPost(title, content, category, tags = '', images = []) {
+export async function createPost(title, content, category, tags = '', images = [], coverImage = null, attachments = []) {
   const res = await safeFetch(`${API}/posts`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ title, content, category, tags, images }),
+    body: JSON.stringify({ title, content, category, tags, images, cover_image: coverImage, attachments }),
   });
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || 'Ошибка публикации');
   return data;
+}
+
+export async function updatePost(id, data) {
+  const body = {};
+  if (data.title != null) body.title = data.title;
+  if (data.content != null) body.content = data.content;
+  if (data.category != null) body.category = data.category;
+  if (data.tags != null) body.tags = data.tags;
+  if (data.images != null) body.images = Array.isArray(data.images) ? data.images : [data.images];
+  if (data.cover_image !== undefined) body.cover_image = data.cover_image;
+  if (data.attachments != null) body.attachments = Array.isArray(data.attachments) ? data.attachments : [];
+  const res = await safeFetch(`${API}/posts/${id}`, {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка обновления');
+  return out;
+}
+
+export async function deletePost(id) {
+  const res = await safeFetch(`${API}/posts/${id}`, { method: 'DELETE', headers: headers() });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка удаления');
+  return out;
 }
 
 export async function votePost(postId, vote) {
@@ -169,6 +216,25 @@ export async function addComment(postId, content, images = [], parentId = null) 
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || 'Ошибка публикации');
   return data;
+}
+
+export async function updateComment(postId, commentId, content, images = []) {
+  const body = { content: content || '', images: Array.isArray(images) ? images : (images ? [images] : []) };
+  const res = await safeFetch(`${API}/posts/${postId}/comments/${commentId}`, {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.error || 'Ошибка обновления');
+  return data;
+}
+
+export async function deleteComment(postId, commentId) {
+  const res = await safeFetch(`${API}/posts/${postId}/comments/${commentId}`, { method: 'DELETE', headers: headers() });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка удаления');
+  return out;
 }
 
 export async function search(q) {
@@ -268,25 +334,70 @@ export async function getChatHistory(userId, contactId) {
   }
 }
 
-export async function sendPrivateMessage(senderId, receiverId, content) {
+export async function getAttachments(userId, contactId) {
+  const res = await safeFetch(`${API}/messages/attachments/${userId}/${contactId}`, { headers: headers() });
+  if (!res.ok) return { media: [], files: [], links: [] };
+  try {
+    return await safeJson(res);
+  } catch {
+    return { media: [], files: [], links: [] };
+  }
+}
+
+export async function sendPrivateMessage(senderId, receiverId, content, attachments = []) {
+  const body = { senderId, receiverId, content: (content || '').trim(), attachments: Array.isArray(attachments) ? attachments : [] };
   const res = await safeFetch(`${API}/messages`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ senderId, receiverId, content: content.trim() }),
+    body: JSON.stringify(body),
   });
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || 'Ошибка отправки');
   return data;
 }
 
-export async function updateProfile({ username, avatar, cover, gender, occupation, interests }) {
+export async function deleteMessage(messageId) {
+  const res = await safeFetch(`${API}/messages/${messageId}`, { method: 'DELETE', headers: headers() });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка удаления');
+  return out;
+}
+
+export async function togglePinMessage(messageId) {
+  const res = await safeFetch(`${API}/messages/${messageId}/pin`, { method: 'POST', headers: headers() });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.error || 'Ошибка закрепления');
+  return data;
+}
+
+export async function unpinMessage(messageId) {
+  const res = await safeFetch(`${API}/messages/${messageId}/unpin`, { method: 'POST', headers: headers() });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.error || 'Ошибка открепления');
+  return data;
+}
+
+export async function getAISuggest(userId, contactId) {
+  const res = await safeFetch(`${API}/ai/suggest`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ userId, contactId }),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.error || 'Ошибка AI');
+  return data;
+}
+
+export async function updateProfile({ username, nickname, avatar, cover, gender, occupation, interests, settings }) {
   const body = {};
   if (username != null) body.username = username;
+  if (nickname != null) body.nickname = nickname;
   if (avatar !== undefined) body.avatar = avatar;
   if (cover !== undefined) body.cover = cover;
   if (gender != null) body.gender = gender;
   if (occupation != null) body.occupation = occupation;
   if (interests != null) body.interests = interests;
+  if (settings !== undefined) body.settings = settings;
   const res = await safeFetch(`${API}/users/me`, {
     method: 'PATCH',
     headers: headers(),
@@ -294,6 +405,28 @@ export async function updateProfile({ username, avatar, cover, gender, occupatio
   });
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || 'Ошибка обновления');
+  return data;
+}
+
+export async function saveSettings(payload) {
+  const res = await safeFetch(`${API}/users/me/settings`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(payload),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.error || 'Ошибка сохранения');
+  return data;
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  const res = await safeFetch(`${API}/users/me/password`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await safeJson(res);
+  if (!res.ok) throw new Error(data?.error || 'Ошибка смены пароля');
   return data;
 }
 
@@ -307,15 +440,40 @@ export async function getWall(userId) {
   }
 }
 
-export async function postWall(userId, content, threadId = null, threadTitle = null, images = [], pollQuestion = null, pollOptions = null) {
+export async function postWall(userId, content, threadId = null, threadTitle = null, images = [], pollQuestion = null, pollOptions = null, threadImage = null) {
+  const body = { content: content || '', thread_id: threadId, thread_title: threadTitle, images: images || [], poll_question: pollQuestion || null, poll_options: pollOptions || null };
+  if (threadImage != null) body.thread_image = threadImage;
   const res = await safeFetch(`${API}/wall/${userId}`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ content: content || '', thread_id: threadId, thread_title: threadTitle, images: images || [], poll_question: pollQuestion || null, poll_options: pollOptions || null }),
+    body: JSON.stringify(body),
   });
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || 'Ошибка');
   return data;
+}
+
+export async function updateWallPost(userId, postId, data) {
+  const body = {};
+  if (data.content != null) body.content = data.content;
+  if (data.images != null) body.images = Array.isArray(data.images) ? data.images : [];
+  if (data.poll_question !== undefined) body.poll_question = data.poll_question;
+  if (data.poll_options !== undefined) body.poll_options = data.poll_options;
+  const res = await safeFetch(`${API}/wall/${userId}/${postId}`, {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка обновления');
+  return out;
+}
+
+export async function deleteWallPost(userId, postId) {
+  const res = await safeFetch(`${API}/wall/${userId}/${postId}`, { method: 'DELETE', headers: headers() });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка удаления');
+  return out;
 }
 
 export async function voteWallPoll(userId, postId, optionIndex) {
@@ -349,6 +507,13 @@ export async function addWallComment(userId, postId, content) {
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || 'Ошибка');
   return data;
+}
+
+export async function deleteWallComment(userId, postId, commentId) {
+  const res = await safeFetch(`${API}/wall/${userId}/${postId}/comment/${commentId}`, { method: 'DELETE', headers: headers() });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка удаления');
+  return out;
 }
 
 export async function getStats() {
@@ -504,6 +669,37 @@ export async function recalculateReputation() {
   const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || 'Ошибка пересчёта');
   return data;
+}
+
+export async function getEmojis() {
+  const res = await safeFetch(`${API}/emojis`, { headers: headers() });
+  if (!res.ok) return [];
+  try {
+    return await safeJson(res);
+  } catch {
+    return [];
+  }
+}
+
+export async function createEmoji(data) {
+  const res = await safeFetch(`${API}/emojis`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка создания смайла');
+  return out;
+}
+
+export async function deleteEmoji(id) {
+  const res = await safeFetch(`${API}/emojis/${id}`, {
+    method: 'DELETE',
+    headers: headers(),
+  });
+  const out = await safeJson(res);
+  if (!res.ok) throw new Error(out?.error || 'Ошибка удаления');
+  return out;
 }
 
 export async function getAdminPosts(page = 1, perPage = 20) {

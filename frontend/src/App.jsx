@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search, MessageSquare, User, Code, Terminal, Briefcase, Shield,
   ChevronRight, MessageCircle, TrendingUp, MessageSquarePlus, Zap, Lock,
-  FileText, ExternalLink, Award, Crown, X, ArrowUp, ArrowDown, ChevronLeft,
-  Send, Eye, Activity, Trophy, Pencil, ImagePlus, Image, List, Smile,
-  Heart, ThumbsUp, Gift, Users, ChevronDown, Plus, Trash2, UserPlus, UserMinus, Settings, Camera, Share2, Link, Repeat2, Paperclip, Folder, Palette
+  FileText, ExternalLink, Award, Crown, X, ChevronLeft,
+  Send, SendHorizontal, Eye, Activity, Trophy, Pencil, ImagePlus, Image, List, Smile, Video,
+  Heart, ThumbsUp, Gift, Users, ChevronDown, Plus, Trash2, UserPlus, UserMinus, Settings, Camera, Share2, Link, Repeat2, Paperclip, Folder, Palette, Download, Save, ArrowUpRight, Clock, Flame, Pin, PanelRight, Copy, Play, RefreshCw, EyeOff, Key, Wand2
 } from 'lucide-react';
 
 const LUCIDE_ICONS = { Code, Shield, Terminal, Briefcase, MessageSquare, MessageCircle, Folder, FileText, Zap, Lock, List, Activity, Award };
@@ -66,6 +66,7 @@ const getAvatarGlowStyles = (rank) => {
 };
 
 const getAvatarUrl = (u) => u?.custom_avatar || u?.avatar || null;
+const getDisplayName = (u) => u?.nickname || u?.username || 'user';
 const isPlaceholderUrl = (url) => !url || typeof url !== 'string' || url.includes('unsplash') || url.includes('dicebear') || url.includes('placeholder') || url.includes('yandex');
 const getWallAvatarUrl = (u) => (u?.custom_avatar || u?.avatar) && !isPlaceholderUrl(u?.custom_avatar || u?.avatar) ? (u.custom_avatar || u.avatar) : null;
 
@@ -125,7 +126,7 @@ const UserLink = ({ userId, username, avatarUrl, rank, rankColor, size = 'md', o
 const UserBanner = ({ rank, color }) => {
   const c = color || getRankColor(rank);
   return (
-    <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded-sm bg-opacity-10 border border-current ${c} flex items-center gap-1`}>
+    <span className={`text-[10px] uppercase font-semibold tracking-widest px-1.5 py-0.5 rounded border border-white/10 bg-white/5 ${c} flex items-center gap-1`}>
       {(rank === 'Легенда' || rank === 'Legend') && <Crown size={8} />}
       {rank}
     </span>
@@ -215,7 +216,7 @@ function TrophyCarousel({ trophies, emptyMessage = 'Нет трофеев', bgGr
   );
 }
 
-function ThreadActions({ thread, user, onCopyLink, onRepost, setToast }) {
+function ThreadActions({ thread, user, onCopyLink, onRepost, onEdit, onDelete, setToast }) {
   const [isLiked, setIsLiked] = useState(thread?.liked ?? false);
   const [likesCount, setLikesCount] = useState(thread?.likes_count ?? 0);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
@@ -254,42 +255,81 @@ function ThreadActions({ thread, user, onCopyLink, onRepost, setToast }) {
     setIsShareMenuOpen(false);
   };
 
-  const handleRepost = async () => {
-    await onRepost?.();
+  const [repostModalOpen, setRepostModalOpen] = useState(false);
+  const [repostComment, setRepostComment] = useState('');
+
+  const handleRepostClick = () => {
+    setRepostModalOpen(true);
+    setRepostComment('');
+  };
+
+  const handleRepostSubmit = async () => {
+    await onRepost?.(repostComment);
+    setRepostModalOpen(false);
     setIsShareMenuOpen(false);
   };
 
+  const canEdit = user && (thread?.author_id === user.id || user.is_admin || user.id === 1 || user.username === 'admin_dev');
+
   return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={handleLike}
-        disabled={!user}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${isLiked ? 'text-red-500' : 'text-[#8b949e] hover:text-red-400'} hover:bg-white/5`}
-      >
-        <Heart size={18} className={isLiked ? 'fill-current' : ''} />
-        <span>{likesCount}</span>
-      </button>
-      <div className="relative" ref={shareRef}>
+    <div className="flex items-center justify-between w-full">
+      <div className="flex items-center gap-4">
         <button
           type="button"
-          onClick={() => setIsShareMenuOpen((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#8b949e] hover:text-white hover:bg-white/10 transition-all"
+          onClick={handleLike}
+          disabled={!user}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${isLiked ? 'text-red-500' : 'text-[#8b949e] hover:text-red-400'} hover:bg-white/5`}
         >
-          <Share2 size={18} />
-          <span className="hidden sm:inline">Поделиться</span>
+          <Heart size={18} className={isLiked ? 'fill-current' : ''} />
+          <span>{likesCount}</span>
         </button>
+        <div className="relative" ref={shareRef}>
+          <button
+            type="button"
+            onClick={() => setIsShareMenuOpen((v) => !v)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#8b949e] hover:text-white hover:bg-white/10 transition-all"
+          >
+            <Share2 size={18} />
+            <span className="hidden sm:inline">Поделиться</span>
+          </button>
         {isShareMenuOpen && (
-          <div className="absolute left-0 top-full mt-1 z-[100] min-w-[200px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-xl overflow-hidden">
+          <div className="absolute left-0 bottom-full mb-2 z-[100] min-w-[200px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-xl overflow-hidden">
             <button type="button" onClick={handleCopyLink} className="w-full text-left px-4 py-3 text-sm text-[#c9d1d9] hover:bg-white/5 flex items-center gap-2 transition-colors">
               <Link size={14} /> Скопировать ссылку
             </button>
-            <button type="button" onClick={handleRepost} disabled={!user} className="w-full text-left px-4 py-3 text-sm text-[#c9d1d9] hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 transition-colors">
+            <button type="button" onClick={handleRepostClick} disabled={!user} className="w-full text-left px-4 py-3 text-sm text-[#c9d1d9] hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 transition-colors">
               <Repeat2 size={14} /> Репостнуть на стену
             </button>
           </div>
         )}
+        </div>
       </div>
+      {repostModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setRepostModalOpen(false)}>
+          <div className="bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-5 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-medium text-white mb-3">Добавить комментарий?</p>
+            <textarea value={repostComment} onChange={(e) => setRepostComment(e.target.value)} placeholder="Ваш комментарий к репосту (необязательно)..." className="w-full min-h-[80px] py-2 px-3 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[var(--color-accent)] resize-none mb-4" />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setRepostModalOpen(false)} className="px-4 py-2 text-[#8b949e] hover:text-white rounded-lg text-sm font-medium">Отмена</button>
+              <button type="button" onClick={handleRepostSubmit} className="px-4 py-2 bg-[var(--color-accent)] text-black rounded-lg text-sm font-bold hover:opacity-90">Опубликовать</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {canEdit && (onEdit || onDelete) && (
+        <div className="flex items-center gap-2">
+          {onEdit && (
+            <button type="button" onClick={onEdit} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors" title="Редактировать">
+              <Pencil size={18} />
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" onClick={onDelete} className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors" title="Удалить">
+              <Trash2 size={18} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -351,14 +391,25 @@ function RankBadge({ userId, currentRank, currentColor, isAdmin, onRankChange, l
   );
 }
 
-function SimpleMarkdown({ children }) {
+function SimpleMarkdown({ children, emojis }) {
   const text = String(children || '');
   if (!text.trim()) return null;
+  const emojiMap = (emojis || []).reduce((acc, e) => {
+    if (e?.code && e?.type === 'image' && e?.value) acc[e.code.toLowerCase()] = e.value;
+    return acc;
+  }, {});
   const parts = text.split(/(```[\s\S]*?```)/g);
-  const renderText = (t) =>
-    t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  const renderText = (t) => {
+    let out = t;
+    out = out.replace(/:([a-zA-Z0-9_]+):/g, (match) => {
+      const code = ':' + match.slice(1, -1) + ':';
+      const src = emojiMap[code.toLowerCase()];
+      return src ? `<img src="${src.replace(/"/g, '&quot;')}" alt="" class="inline-block w-6 h-6 align-middle mx-0.5" />` : match;
+    });
+    return out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\n/g, '<br/>');
+  };
   return (
     <div className="prose-emerald">
       {parts.map((p, i) =>
@@ -384,12 +435,7 @@ function PlusIcon({ size, className }) {
 
 function PostSkeleton() {
   return (
-    <div className="p-4 flex items-center gap-4 animate-pulse">
-      <div className="w-8 flex flex-col gap-2">
-        <div className="h-5 bg-[#30363d] rounded" />
-        <div className="h-4 bg-[#30363d] rounded w-6 mx-auto" />
-        <div className="h-5 bg-[#30363d] rounded" />
-      </div>
+    <div className="p-5 flex items-center gap-4 animate-pulse">
       <div className="flex-1 space-y-2">
         <div className="h-4 bg-[#30363d] rounded w-3/4" />
         <div className="h-3 bg-[#30363d] rounded w-1/2" />
@@ -398,54 +444,796 @@ function PostSkeleton() {
   );
 }
 
-function PostCard({ post, votes, onVote, onClick, onAuthorClick, categoryColor }) {
+function PostCard({ post, onClick, onAuthorClick, categoryColor, onViewImage }) {
   const color = categoryColor || '#10b981';
+  const hasCover = post.cover_image;
   return (
-    <div onClick={() => onClick(post)} className="group p-5 flex items-center gap-4 hover:bg-[#1c2128] transition-colors cursor-pointer">
-      <div className="flex flex-col items-center gap-1 flex-shrink-0 w-8">
-        <button onClick={(e) => onVote(post, 'up', e)} className={`p-1 rounded hover:bg-[#30363d] transition-colors ${votes[post.id] === 1 ? 'text-[var(--color-accent)]' : 'text-[#484f58]'}`}>
-          <ArrowUp size={20} />
-        </button>
-        <span className="text-xs font-bold text-[#f0f6fc]">{post.votes ?? 0}</span>
-        <button onClick={(e) => onVote(post, 'down', e)} className={`p-1 rounded hover:bg-[#30363d] transition-colors ${votes[post.id] === -1 ? 'text-red-500' : 'text-[#484f58]'}`}>
-          <ArrowDown size={20} />
-        </button>
-      </div>
-      <div className="flex-1 min-w-0">
+    <div onClick={() => onClick(post)} className={`group flex items-center gap-4 hover:bg-[#1c2128] transition-colors cursor-pointer overflow-hidden ${hasCover ? 'min-h-[100px]' : ''}`}>
+      <div className="flex-1 min-w-0 p-5 flex flex-col justify-center">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded border" style={{ color, backgroundColor: `${color}15`, borderColor: `${color}30` }}>{post.category}</span>
-          <h3 className="text-sm md:text-base font-bold text-[#f0f6fc] group-hover:text-[var(--color-accent)] transition-colors break-all">{post.title}</h3>
-          {post.is_pinned && <span className="text-[9px] text-amber-400">Закреплено</span>}
+          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border border-white/10 bg-white/5 shrink-0" style={{ color, borderColor: `${color}40` }}>{post.category}</span>
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-2 min-w-0">
+              {post.is_hot_trending ? <Flame size={16} className="text-orange-500 animate-pulse shrink-0 drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]" title="Горячая тема" /> : null}
+              <h4 className="font-bold text-white text-lg leading-tight break-all line-clamp-2 overflow-hidden min-w-0 group-hover:text-[var(--color-accent)] transition-colors">
+                {post.title}
+              </h4>
+            </div>
+          </div>
+          {post.is_pinned ? <span className="text-[9px] text-amber-400 shrink-0">Закреплено</span> : null}
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-[#8b949e]">
+        <div className="flex items-center gap-3 text-[11px] text-slate-500">
           {onAuthorClick && post.author_id ? (
             <UserLink userId={post.author_id} username={post.author} avatarUrl={post.author_avatar || getAvatarUrl({ username: post.author })} rank={post.rank} rankColor={post.rank_color} size="sm" onClick={onAuthorClick} />
           ) : (
             <>
-              <span className={`font-bold ${post.rank_color || 'text-slate-400'}`}>{post.author}</span>
+              <span className={`font-semibold text-slate-200 ${post.rank_color || 'text-slate-400'}`}>{post.author}</span>
               <UserBanner rank={post.rank || 'User'} color={post.rank_color || 'text-slate-400'} />
             </>
           )}
-          <span>•</span>
+          <span className="text-slate-600">•</span>
           <span>{post.time}</span>
-          <span className="flex items-center gap-1 ml-auto"><MessageSquare size={12} /> {post.replies ?? 0}</span>
-          <span className="flex items-center gap-1"><Eye size={12} /> {post.views ?? 0}</span>
+          <span className="flex items-center gap-1 ml-auto text-slate-500"><MessageSquare size={12} /> {post.replies ?? 0}</span>
+          <span className="flex items-center gap-1 text-slate-500"><Eye size={12} /> {post.views ?? 0}</span>
+        </div>
+      </div>
+      {hasCover && (
+        <div className="w-24 sm:w-28 h-28 flex-shrink-0 relative overflow-hidden rounded-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute inset-0 bg-gradient-to-l from-[var(--bg-block)] to-transparent z-10 pointer-events-none" />
+          <img src={post.cover_image} alt="" className="w-full h-full object-cover object-center cursor-zoom-in" onClick={(e) => { e.stopPropagation(); onViewImage?.([post.cover_image], 0); }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+function ContentWithEmojis({ text, emojis, className }) {
+  if (!text) return null;
+  const emojiMap = (emojis || []).reduce((acc, e) => {
+    if (e.code) acc[e.code.toLowerCase()] = e;
+    return acc;
+  }, {});
+  const parts = String(text).split(/(:[a-zA-Z0-9_]+:)/g);
+  return (
+    <span className={className}>
+      {parts.map((p, i) => {
+        if (p.startsWith(':') && p.endsWith(':')) {
+          const e = emojiMap[p.toLowerCase()];
+          if (e?.type === 'image' && e?.value) {
+            return <img key={i} src={e.value} alt="" className="inline-block w-6 h-6 align-middle mx-0.5" />;
+          }
+        }
+        return <span key={i}>{p}</span>;
+      })}
+    </span>
+  );
+}
+
+function UnifiedEmojiPicker({ emojis, onSelect, open, onClose, anchorRef, className }) {
+  if (!open) return null;
+  const list = emojis || [];
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
+      <div
+        className={`emoji-picker-enter absolute bottom-full left-0 mb-3 z-50 w-72 h-64 overflow-hidden rounded-2xl bg-black/60 backdrop-blur-xl border border-[var(--color-accent)]/20 shadow-2xl shadow-[var(--color-accent)]/5 transition-all duration-200 ease-out ${className || ''}`}
+      >
+        <div className="grid grid-cols-6 gap-2 p-3 h-full overflow-y-auto overflow-x-hidden scrollbar-picker">
+          {list.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => {
+                const insert = e.type === 'unicode' ? e.value : (e.code || `:${e.name}:`);
+                onSelect?.(insert, e.type);
+                onClose?.();
+              }}
+              className="aspect-square flex items-center justify-center rounded-xl bg-white/[0.03] hover:bg-white/10 hover:scale-110 hover:shadow-[0_0_10px_-5px_var(--color-accent)] transition-all duration-200 cursor-pointer"
+              title={e.code}
+            >
+              {e.type === 'unicode' ? (
+                <span className="text-2xl">{e.value}</span>
+              ) : (
+                <img src={e.value} alt="" className="w-8 h-8 object-contain drop-shadow-sm" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SharedContentSidebar({ media, files, links, activeTab, onTabChange, searchQuery, onSearchChange, onClose, scrollToMessage }) {
+  const [videoErrors, setVideoErrors] = useState(new Set());
+  useEffect(() => { setVideoErrors(new Set()); }, [media]);
+  const filterItems = (items, getText) => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.toLowerCase().trim();
+    return items.filter((item) => getText(item).toLowerCase().includes(q));
+  };
+  const filteredMedia = filterItems(media, (m) => m.name || m.url || '');
+  const filteredFiles = filterItems(files, (f) => f.name || f.url || '');
+  const filteredLinks = filterItems(links, (l) => l.url || '');
+  return (
+    <aside className="w-80 border-l border-white/5 bg-[#0a0a0a]/40 backdrop-blur-xl flex flex-col animate-slideLeft shrink-0">
+      <div className="p-4 border-b border-white/5 flex items-center justify-between">
+        <h3 className="font-bold text-sm uppercase tracking-widest text-gray-400">Вложения</h3>
+        <button type="button" onClick={onClose} className="p-1 text-gray-500 hover:text-white transition-colors">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="p-2">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Поиск..."
+          className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-[var(--color-accent)]/50"
+        />
+      </div>
+      <div className="flex p-2 gap-1 bg-white/5 mx-2 rounded-lg">
+        {['Медиа', 'Файлы', 'Ссылки'].map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => onTabChange(tab)}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${activeTab === tab ? 'bg-white/10 text-white' : 'hover:bg-white/10 text-gray-400'}`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 scrollbar-thin-purple min-h-0">
+        {activeTab === 'Медиа' && (
+          <div className="grid grid-cols-3 gap-2">
+            {filteredMedia.length === 0 ? (
+              <p className="col-span-3 text-xs text-gray-500 py-4 text-center">Нет медиафайлов</p>
+            ) : (
+              filteredMedia.map((item, i) => {
+                const mediaKey = `${item.messageId}-${i}`;
+                const videoFailed = videoErrors.has(mediaKey);
+                return (
+                <div
+                  key={mediaKey}
+                  role="button"
+                  tabIndex={0}
+                  className="relative aspect-square group cursor-pointer overflow-hidden rounded-lg bg-white/5 border border-white/10 hover:border-[var(--color-accent)]/50 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (item.messageId && scrollToMessage) {
+                      scrollToMessage(item.messageId);
+                      onClose?.();
+                    }
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToMessage?.(item.messageId); onClose?.(); } }}
+                >
+                  {item.type === 'image' ? (
+                    <img src={item.url} alt="" className="w-full h-full object-cover" />
+                  ) : item.type === 'video' && !videoFailed ? (
+                    <>
+                      <video
+                        src={`${item.url}#t=0.5`}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                        onError={() => setVideoErrors((prev) => new Set([...prev, mediaKey]))}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-transparent transition-all pointer-events-none">
+                        <Play size={20} className="text-white drop-shadow-md" fill="currentColor" />
+                      </div>
+                      <div className="absolute bottom-1 right-1 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-white pointer-events-none">
+                        <Video size={10} className="inline mr-0.5 align-middle" />
+                        Видео
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-white/5">
+                      <Video size={24} className="text-[var(--color-accent)]" />
+                    </div>
+                  )}
+                </div>
+              ); })
+            )}
+          </div>
+        )}
+        {activeTab === 'Файлы' && (
+          <div className="space-y-2">
+            {filteredFiles.length === 0 ? (
+              <p className="text-xs text-gray-500 py-4 text-center">Нет файлов</p>
+            ) : (
+              filteredFiles.map((item, i) => (
+                <div
+                  key={`${item.messageId}-${i}`}
+                  role="button"
+                  tabIndex={0}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (item.messageId && scrollToMessage) {
+                      scrollToMessage(item.messageId);
+                      onClose?.();
+                    }
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToMessage?.(item.messageId); onClose?.(); } }}
+                >
+                  <FileText size={20} className="text-[var(--color-accent)] shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{item.name}</p>
+                    <p className="text-[10px] text-gray-500">{item.size ? `${(item.size / 1024).toFixed(1)} KB` : ''}</p>
+                  </div>
+                  <a href={item.url} download={item.name} onClick={(e) => e.stopPropagation()} className="p-1.5 text-gray-500 hover:text-white transition-colors shrink-0" title="Скачать">
+                    <Download size={14} />
+                  </a>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+        {activeTab === 'Ссылки' && (
+          <div className="space-y-2">
+            {filteredLinks.length === 0 ? (
+              <p className="text-xs text-gray-500 py-4 text-center">Нет ссылок</p>
+            ) : (
+              filteredLinks.map((item, i) => (
+                <div
+                  key={`${item.messageId}-${i}`}
+                  role="button"
+                  tabIndex={0}
+                  className="flex items-center gap-2 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (item.messageId && scrollToMessage) {
+                      scrollToMessage(item.messageId);
+                      onClose?.();
+                    }
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToMessage?.(item.messageId); onClose?.(); } }}
+                >
+                  <Link size={16} className="text-[var(--color-accent)] shrink-0" />
+                  <span className="flex-1 text-sm text-[var(--color-accent)] truncate">{item.url}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(item.url); }}
+                    className="p-1.5 text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity rounded"
+                    title="Копировать"
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity rounded" title="Открыть в новой вкладке">
+                    <ExternalLink size={14} />
+                  </a>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function AIAssistantPanel({ user, activeChatUser, aiAnalysis, aiDraft, aiLoading, onApplyDraft, onRegenerate, onSendDraft, onClose, onOpenProfile, onOpenSettings }) {
+  const hasKey = user?.has_openai_key;
+  return (
+    <aside className="w-80 border-l border-white/5 bg-[#0a0a0a]/40 backdrop-blur-xl flex flex-col animate-slideLeft shrink-0">
+      <div className="p-4 border-b border-white/5 flex items-center justify-between">
+        <h3 className="font-bold text-sm uppercase tracking-widest text-gray-400 flex items-center gap-2">
+          <Wand2 size={16} className="text-[var(--color-accent)]" />
+          AI Ассистент
+        </h3>
+        <button type="button" onClick={onClose} className="p-1 text-gray-500 hover:text-white transition-colors">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 scrollbar-thin-purple min-h-0">
+        {!hasKey ? (
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+            <Key size={40} className="text-[var(--color-accent)]/50 mb-4" />
+            <p className="text-sm text-gray-400 leading-relaxed">
+              Пожалуйста, добавьте ваш OpenAI API Key в настройках, чтобы активировать ассистента.
+            </p>
+            <button
+              type="button"
+              onClick={() => { onClose?.(); (onOpenSettings || onOpenProfile)?.(); }}
+              className="mt-4 text-xs text-[var(--color-accent)] hover:underline"
+            >
+              Перейти в настройки →
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col h-full min-h-[200px] space-y-4">
+            <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+              <p className="text-[10px] text-blue-400 font-bold uppercase mb-1">Анализ контекста</p>
+              {aiLoading ? (
+                <p className="text-xs text-gray-400 flex items-center gap-2">
+                  <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  GPT думает...
+                </p>
+              ) : (
+                <p className="text-xs text-gray-300">{aiAnalysis || 'Выберите чат. AI проанализирует последние сообщения и предложит ответ.'}</p>
+              )}
+            </div>
+            <div className="flex-1 bg-black/20 rounded-lg p-3 border border-white/5 min-h-[80px]">
+              <p className="text-[10px] text-gray-500 mb-2 uppercase">Черновик ответа:</p>
+              <textarea
+                readOnly
+                value={aiDraft || ''}
+                className="w-full h-24 sm:h-32 bg-transparent border-none text-sm text-gray-200 resize-none focus:outline-none placeholder:text-gray-600"
+                placeholder={aiLoading ? '...' : 'Черновик появится после анализа'}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onApplyDraft?.(aiDraft)}
+                disabled={!aiDraft || aiLoading}
+                className="bg-[var(--color-accent)] text-white text-xs py-2 rounded-md font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-1.5"
+              >
+                Вставить в поле ввода
+              </button>
+              <button
+                type="button"
+                onClick={() => onRegenerate?.()}
+                disabled={aiLoading}
+                className="bg-white/10 text-white text-xs py-2 rounded-md font-bold hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw size={12} className={aiLoading ? 'animate-spin' : ''} />
+                Перегенерировать
+              </button>
+              <button
+                type="button"
+                onClick={() => onSendDraft?.(aiDraft)}
+                disabled={!aiDraft || aiLoading}
+                className="col-span-2 bg-indigo-500/80 text-white text-xs py-2 rounded-md font-bold hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5"
+              >
+                <SendHorizontal size={12} />
+                Отправить сразу
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+const inputFocusClass = 'focus:outline-none focus:border-[var(--color-accent)]/50 focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:shadow-[0_0_20px_rgba(16,185,129,0.15)] transition-all';
+
+function SettingsPage({ user, setUser, setToast, onBack }) {
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [login, setLogin] = useState(user?.username || '');
+  const [nickname, setNickname] = useState(user?.nickname || user?.username || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [profileVisibility, setProfileVisibility] = useState(user?.settings?.privacy?.profile_visibility || 'everyone');
+  const [showOnlineStatus, setShowOnlineStatus] = useState(user?.settings?.privacy?.show_online_status !== false);
+  const [messageAccess, setMessageAccess] = useState(user?.settings?.privacy?.message_access || 'all');
+  const [saving, setSaving] = useState(false);
+  const [currentPasswordError, setCurrentPasswordError] = useState(false);
+  const [passwordShake, setPasswordShake] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  useEffect(() => {
+    setLogin(user?.username || '');
+    setNickname(user?.nickname || user?.username || '');
+    setProfileVisibility(user?.settings?.privacy?.profile_visibility || 'everyone');
+    setShowOnlineStatus(user?.settings?.privacy?.show_online_status !== false);
+    setMessageAccess(user?.settings?.privacy?.message_access || 'all');
+  }, [user?.id, user?.username, user?.nickname, user?.settings?.privacy]);
+
+  const handleSave = async (e) => {
+    e?.preventDefault();
+    if (!user?.id) return;
+    const changingPassword = newPassword || confirmPassword;
+    const hasOpenAIKeyToSave = openaiKeyInput?.trim();
+    if (!currentPassword?.trim()) {
+      setCurrentPasswordError(true);
+      setPasswordShake(true);
+      setTimeout(() => setPasswordShake(false), 500);
+      setToast({
+        message: hasOpenAIKeyToSave ? 'Для сохранения ключа AI необходимо подтвердить личность паролем' : 'Для сохранения изменений введите текущий пароль',
+        type: 'error',
+      });
+      return;
+    }
+    setCurrentPasswordError(false);
+    if (changingPassword) {
+      if (newPassword !== confirmPassword) {
+        setToast({ message: 'Пароли не совпадают', type: 'error' });
+        return;
+      }
+      if (!newPassword || newPassword.length < 4) {
+        setToast({ message: 'Новый пароль минимум 4 символа', type: 'error' });
+        return;
+      }
+    }
+    const loginTrimmed = login.trim().toLowerCase();
+    if (loginTrimmed && !/^[a-z0-9_]+$/.test(loginTrimmed)) {
+      setToast({ message: 'Логин: только a-z, 0-9 и _', type: 'error' });
+      return;
+    }
+    if (loginTrimmed && loginTrimmed.length < 2) {
+      setToast({ message: 'Логин минимум 2 символа', type: 'error' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const openaiKeyValue = openaiKeyInput.trim() || undefined;
+      if (openaiKeyValue && openaiKeyValue === loginTrimmed && !openaiKeyValue.startsWith('sk-')) {
+        setToast({ message: 'Ключ AI не может совпадать с логином. Введите корректный OpenAI API ключ (начинается с sk-).', type: 'error' });
+        setSaving(false);
+        return;
+      }
+      const payload = {
+        username: loginTrimmed || undefined,
+        nickname: nickname.trim() || undefined,
+        settings: {
+          openai_key: openaiKeyValue,
+          privacy: {
+            profile_visibility: profileVisibility,
+            show_online_status: showOnlineStatus,
+            message_access: messageAccess,
+          },
+        },
+      };
+      payload.currentPassword = currentPassword;
+      if (changingPassword) {
+        payload.newPassword = newPassword;
+        payload.confirmPassword = confirmPassword;
+      }
+      const updated = await api.saveSettings(payload);
+      setUser((prev) => prev ? { ...prev, ...updated, has_openai_key: updated?.has_openai_key ?? !!openaiKeyValue } : prev);
+      setOpenaiKeyInput('');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setCurrentPasswordError(false);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2000);
+      setToast({ message: 'Настройки успешно сохранены', type: 'success' });
+    } catch (err) {
+      const msg = err?.message || 'Ошибка сохранения';
+      setToast({ message: msg, type: 'error' });
+      if (msg.includes('пароль') || msg.includes('Старый пароль') || msg.includes('неверный')) {
+        setCurrentPasswordError(true);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
+        <p className="text-gray-400">Войдите для доступа к настройкам</p>
+        <button onClick={onBack} className="mt-4 text-[var(--color-accent)] hover:underline text-sm">Назад</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-[11px] text-[#484f58] font-bold uppercase tracking-wider">
+        <button onClick={onBack} className="hover:text-[var(--color-accent)] transition-colors flex items-center gap-1">
+          <ChevronLeft size={14} />
+          Назад
+        </button>
+        <ChevronRight size={12} />
+        <span className="text-[var(--color-accent)]">Настройки</span>
+      </div>
+
+      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.2)]">
+        <div className="p-6 md:p-8 space-y-8">
+          {/* Интеграции */}
+          <section>
+            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Zap size={16} className="text-[var(--color-accent)]" />
+              Интеграции
+            </h3>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Этот ключ используется для работы вашего персонального AI-ассистента в чатах.
+              </p>
+              <div className="relative">
+                <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  type={showOpenaiKey ? 'text' : 'password'}
+                  value={openaiKeyInput}
+                  onChange={(e) => setOpenaiKeyInput(e.target.value)}
+                  placeholder={user?.has_openai_key ? '•••••••••••• (ключ сохранён)' : 'OpenAI API Key'}
+                  className={`w-full pl-9 pr-10 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOpenaiKey((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-white transition-colors rounded"
+                  title={showOpenaiKey ? 'Скрыть' : 'Показать'}
+                >
+                  {showOpenaiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Аккаунт */}
+          <section>
+            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+              <User size={16} className="text-[var(--color-accent)]" />
+              Аккаунт
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Логин (ID для входа)</label>
+                <input
+                  type="text"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())}
+                  placeholder="Только a-z, 0-9, _"
+                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Отображаемое имя (Никнейм)</label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="Например: Никита"
+                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
+                />
+              </div>
+              <div className="pt-2 border-t border-white/5">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Смена пароля</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
+                      Текущий пароль <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => {
+                        setCurrentPassword(e.target.value);
+                        if (currentPasswordError) setCurrentPasswordError(false);
+                      }}
+                      placeholder="Текущий пароль"
+                      className={`w-full px-4 py-3 text-sm bg-black/30 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass} ${currentPasswordError ? 'border-2 border-red-500/60 ring-2 ring-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)]' : 'border border-white/10'} ${passwordShake ? 'animate-shake' : ''}`}
+                    />
+                    {currentPasswordError && (
+                      <p className="mt-1.5 text-xs text-red-400">Введите текущий пароль для подтверждения изменений</p>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Новый пароль"
+                    className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
+                  />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Повторите новый пароль"
+                    className={`w-full px-4 py-3 text-sm bg-black/30 border rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass} ${newPassword && confirmPassword && newPassword !== confirmPassword ? 'border-red-500/60 ring-2 ring-red-500/20' : 'border-white/10'}`}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Приватность */}
+          <section>
+            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Lock size={16} className="text-[var(--color-accent)]" />
+              Приватность
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Видимость профиля</label>
+                <select
+                  value={profileVisibility}
+                  onChange={(e) => setProfileVisibility(e.target.value)}
+                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white ${inputFocusClass}`}
+                >
+                  <option value="everyone">Видят все</option>
+                  <option value="friends">Только подписчики</option>
+                  <option value="nobody">Скрытый профиль</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <label className="text-sm text-gray-300">Показывать, когда я в сети</label>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showOnlineStatus}
+                  onClick={() => setShowOnlineStatus((v) => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${showOnlineStatus ? 'bg-[var(--color-accent)]' : 'bg-white/10'}`}
+                >
+                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${showOnlineStatus ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Кто может писать мне в ЛС</label>
+                <select
+                  value={messageAccess}
+                  onChange={(e) => setMessageAccess(e.target.value)}
+                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white ${inputFocusClass}`}
+                >
+                  <option value="all">Все</option>
+                  <option value="friends">Только друзья</option>
+                  <option value="none">Никто</option>
+                </select>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="px-6 md:px-8 py-4 border-t border-white/5 bg-black/20">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || (newPassword && confirmPassword && newPassword !== confirmPassword)}
+            className={`w-full sm:w-auto px-8 py-3 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${savedSuccess ? 'bg-emerald-500 text-white' : 'bg-[var(--color-accent)] text-black hover:bg-[var(--color-accent)]/90 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]'}`}
+          >
+            {saving ? 'Сохранение...' : savedSuccess ? 'Сохранено!' : 'Сохранить изменения'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function MessagesPage({ user, activeChatUser, conversations, chatHistory, loading, onSelectContact, onSend, getAvatarUrl }) {
+function MessagesPage({ user, activeChatUser, conversations, chatHistory, loading, onSelectContact, onSend, onDeleteMessage, onTogglePin, onUnpin, setToast, getAvatarUrl, openLightbox, emojis, onOpenProfile, onOpenSettings }) {
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState('Медиа');
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [sharedAttachments, setSharedAttachments] = useState({ media: [], files: [], links: [] });
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState('');
+  const [aiDraft, setAiDraft] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const lastAiTriggerRef = useRef(null);
   const historyRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+
+  const scrollToMessage = useCallback((messageId) => {
+    const el = historyRef.current?.querySelector(`[data-message-id="${messageId}"]`);
+    if (el) {
+      el.classList.add('message-highlight');
+      setTimeout(() => el.classList.remove('message-highlight'), 2000);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
+  useEffect(() => {
+    const pinned = chatHistory.find((m) => m.is_pinned);
+    setPinnedMessage(pinned || null);
+  }, [activeChatUser?.id, chatHistory]);
+
+  const handlePin = useCallback((message) => {
+    setPinnedMessage(message);
+    onTogglePin?.(message.id)?.catch?.((err) => {
+      setPinnedMessage(null);
+      setToast?.({ message: err?.message || 'Ошибка закрепления', type: 'error' });
+    });
+  }, [onTogglePin, setToast]);
+
+  const handleUnpin = useCallback(() => {
+    const prev = pinnedMessage;
+    setPinnedMessage(null);
+    if (!prev?.id || !onUnpin) return;
+    onUnpin(prev.id).catch(() => {
+      setPinnedMessage(prev);
+      setToast?.({ message: 'Ошибка открепления', type: 'error' });
+    });
+  }, [pinnedMessage, onUnpin, setToast]);
   useEffect(() => { historyRef.current?.scrollTo(0, historyRef.current.scrollHeight); }, [chatHistory]);
+
+  useEffect(() => {
+    if (!user?.id || !activeChatUser?.id) {
+      setSharedAttachments({ media: [], files: [], links: [] });
+      return;
+    }
+    setLoadingAttachments(true);
+    api.getAttachments(user.id, activeChatUser.id)
+      .then(setSharedAttachments)
+      .catch(() => setSharedAttachments({ media: [], files: [], links: [] }))
+      .finally(() => setLoadingAttachments(false));
+  }, [user?.id, activeChatUser?.id, chatHistory.length]);
+
+  const fetchAISuggest = useCallback(async () => {
+    if (!user?.id || !activeChatUser?.id) return;
+    setAiLoading(true);
+    setAiAnalysis('');
+    setAiDraft('');
+    try {
+      const data = await api.getAISuggest(user.id, activeChatUser.id);
+      setAiAnalysis(data.analysis || '');
+      setAiDraft(data.draft || '');
+    } catch (err) {
+      setAiAnalysis('Ошибка: ' + (err?.message || 'Не удалось получить ответ от AI'));
+      setAiDraft('');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [user?.id, activeChatUser?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !activeChatUser?.id) {
+      setAiAnalysis('');
+      setAiDraft('');
+      lastAiTriggerRef.current = null;
+      return;
+    }
+    const last = chatHistory[chatHistory.length - 1];
+    if (!last || last.isMine) return;
+    if (lastAiTriggerRef.current === last.id) return;
+    lastAiTriggerRef.current = last.id;
+    fetchAISuggest();
+  }, [user?.id, activeChatUser?.id, chatHistory, fetchAISuggest]);
+
+  const handleApplyDraft = useCallback((draft) => {
+    if (draft) setInput(draft);
+  }, []);
+
+  const handleSendDraft = useCallback((draft) => {
+    if (!draft?.trim() || !onSend) return;
+    onSend(draft.trim());
+    setInput('');
+    setAiDraft('');
+    setAiAnalysis('');
+  }, [onSend]);
+
+  useEffect(() => {
+    if (!activeChatUser?.id) lastAiTriggerRef.current = null;
+  }, [activeChatUser?.id]);
+
+  useEffect(() => {
+    const h = (e) => { if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) setEmojiPickerOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const handleFileSelect = useCallback((e) => {
+    const files = [...(e.target.files || [])];
+    const valid = files.filter((f) => f.size <= MAX_ATTACHMENT_SIZE);
+    if (files.length !== valid.length) setToast?.({ message: 'Файл до 10 МБ', type: 'error' });
+    if (valid.length === 0) return;
+    valid.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+        setAttachments((prev) => [...prev, { type, url: reader.result, name: file.name, size: file.size }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }, [setToast]);
+
+  const removeAttachment = (i) => setAttachments((prev) => prev.filter((_, j) => j !== i));
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!input.trim() || !user || !activeChatUser) return;
-    onSend(input.trim());
+    if ((!input.trim() && attachments.length === 0) || !user || !activeChatUser) return;
+    const att = attachments.map((a) => ({ type: a.type, url: a.url, name: a.name, size: a.size }));
+    onSend(input.trim(), att);
     setInput('');
+    setAttachments([]);
   };
+
   const isActive = (c) => activeChatUser?.id === (c?.contactId ?? c?.id);
   const status = getChatUserStatus(activeChatUser);
   return (
@@ -497,50 +1285,191 @@ function MessagesPage({ user, activeChatUser, conversations, chatHistory, loadin
           {activeChatUser ? (
             <>
               {/* Glass header */}
-              <div className="h-16 border-b border-white/5 flex items-center px-6 backdrop-blur-md bg-black/20 sticky top-0 z-10 flex-shrink-0">
-                <div className="relative flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/10 ring-offset-2 ring-offset-black/40 shadow-lg shadow-purple-500/10">
+              <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 backdrop-blur-md bg-black/20 sticky top-0 z-10 flex-shrink-0">
+                <div className="relative flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/10 ring-offset-2 ring-offset-black/40 shadow-lg shadow-purple-500/10 shrink-0">
                     <AvatarWithFallback src={getAvatarUrl(activeChatUser)} alt={activeChatUser.username} fallbackLetter={activeChatUser.username} className="w-full h-full object-cover" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-bold text-white truncate block">{activeChatUser.username}</span>
                     <span className={`text-[10px] flex items-center gap-1 ${status.isOnline ? 'text-emerald-400/90' : 'text-orange-400/90'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${status.isOnline ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${status.isOnline ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`} />
                       {status.label}
                     </span>
                   </div>
                 </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowAIPanel((v) => !v)}
+                    className={`p-2 rounded-lg transition-colors ${showAIPanel ? 'bg-white/10 text-[var(--color-accent)]' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
+                    title={showAIPanel ? 'Скрыть AI' : 'AI Ассистент'}
+                  >
+                    <Wand2 size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSidebar((v) => !v)}
+                    className={`p-2 rounded-lg transition-colors ${showSidebar ? 'bg-white/10 text-[var(--color-accent)]' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
+                    title={showSidebar ? 'Скрыть вложения' : 'Вложения'}
+                  >
+                    <PanelRight size={20} />
+                  </button>
+                </div>
               </div>
               {/* Messages area with depth */}
-              <div ref={historyRef} className="flex-1 overflow-y-auto p-4 space-y-4 relative">
+              <div ref={historyRef} className="flex-1 overflow-y-auto flex flex-col relative overflow-x-hidden">
+                <div
+                  className={`sticky top-0 z-20 shrink-0 transition-all duration-300 transform overflow-hidden ${
+                    pinnedMessage ? 'translate-y-0 opacity-100 max-h-24' : '-translate-y-full opacity-0 max-h-0'
+                  }`}
+                >
+                {pinnedMessage && (
+                  <div className="bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 p-3 flex items-center gap-3">
+                    <div className="w-1 h-8 bg-[var(--color-accent)] rounded-full shrink-0" />
+                    <div
+                      className="flex-1 min-w-0 flex items-center justify-between gap-2 cursor-pointer"
+                      onClick={() => scrollToMessage(pinnedMessage.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-[var(--color-accent)] uppercase tracking-widest">Закреплённое сообщение</p>
+                        <p className="text-sm text-gray-300 line-clamp-1 truncate">{pinnedMessage.content || (pinnedMessage.attachments?.length ? '📎 Файл' : '')}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleUnpin();
+                        }}
+                        className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors shrink-0"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                </div>
+                <div className="flex-1 p-4 space-y-4">
                 {loading && chatHistory.length === 0 ? (
                   <div className="text-white/60 text-sm">Загрузка...</div>
                 ) : !loading && chatHistory.length === 0 ? (
                   <div className="text-white/60 text-sm">Нет сообщений. Напишите первым!</div>
                 ) : (
                   chatHistory.map((m) => (
-                    <div key={m.id} className={`flex ${m.isMine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[70%] px-4 py-2.5 text-sm rounded-2xl shadow-lg ${m.isMine ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-tr-sm shadow-purple-500/20' : 'bg-[#1a1a1a] border border-white/10 text-gray-200 rounded-tl-sm'}`}>
-                        <p className="break-words whitespace-pre-wrap">{m.content}</p>
-                        <span className={`text-[10px] mt-1 block ${m.isMine ? 'text-white/80' : 'text-white/50'}`}>{m.time}</span>
+                    <div key={m.id} data-message-id={m.id} className={`flex ${m.isMine ? 'justify-end' : 'justify-start'} group/message`}>
+                      <div className={`max-w-[70%] px-4 py-2.5 text-sm rounded-2xl shadow-lg relative ${m.isMine ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-tr-sm shadow-purple-500/20' : 'bg-[#1a1a1a] border border-white/10 text-gray-200 rounded-tl-sm'}`}>
+                        {m.attachments?.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {m.attachments.map((a, i) => (
+                              a.type === 'image' ? (
+                                <div key={i} className="rounded-lg overflow-hidden cursor-zoom-in" onClick={() => { const imgs = m.attachments.filter((x) => x.type === 'image').map((x) => x.url); const idx = m.attachments.slice(0, i).filter((x) => x.type === 'image').length; openLightbox?.(imgs, idx); }}>
+                                  <img src={a.url} alt="" className="max-w-[200px] max-h-[150px] object-cover rounded-lg" />
+                                </div>
+                              ) : a.type === 'video' ? (
+                                <video key={i} src={a.url} controls className="max-w-xs max-h-40 rounded-lg" />
+                              ) : (
+                                <a key={i} href={a.url} download={a.name} className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
+                                  <FileText size={16} />
+                                  <span className="truncate max-w-[120px]">{a.name}</span>
+                                  <Download size={14} />
+                                </a>
+                              )
+                            ))}
+                          </div>
+                        )}
+                        {m.content && <p className="break-words whitespace-pre-wrap"><ContentWithEmojis text={m.content} emojis={emojis} /></p>}
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <span className={`text-[10px] ${m.isMine ? 'text-white/80' : 'text-white/50'}`}>{m.time}</span>
+                          <div className="flex items-center gap-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
+                            {(m.isMine || user?.is_admin) && onTogglePin && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  m.is_pinned ? handleUnpin() : handlePin(m);
+                                }}
+                                className={`p-1 rounded hover:bg-white/20 transition-colors ${m.is_pinned ? 'text-[var(--color-accent)]' : 'hover:text-[var(--color-accent)]'}`}
+                                title={m.is_pinned ? 'Открепить' : 'Закрепить'}
+                              >
+                                <Pin size={12} className={m.is_pinned ? 'fill-current' : ''} />
+                              </button>
+                            )}
+                            {(m.isMine || user?.is_admin) && onDeleteMessage && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Удалить сообщение?')) onDeleteMessage(m.id);
+                                }}
+                                className="p-1 rounded hover:bg-white/20 hover:text-red-500 transition-colors"
+                                title="Удалить сообщение"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))
                 )}
+                </div>
               </div>
               {/* Floating glass input */}
               {user ? (
-                <form onSubmit={handleSubmit} className="m-4 p-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl flex items-center gap-2 flex-shrink-0">
-                  <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    className="flex-1 bg-transparent border-none px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-0"
-                    placeholder="Сообщение..."
-                  />
-                  <button type="submit" className="p-3 bg-[var(--color-accent)] text-black rounded-xl shadow-lg hover:shadow-[var(--color-accent)]/50 transition-all duration-300 hover:scale-105">
-                    <Send size={18} />
-                  </button>
-                </form>
+                <div className="m-4 flex-shrink-0">
+                  {attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2 p-2 rounded-xl bg-white/5 border border-white/5">
+                      {attachments.map((a, i) => (
+                        <div key={i} className="relative flex items-center gap-2">
+                          {a.type === 'image' ? (
+                            <div className="w-14 h-14 rounded-lg overflow-hidden">
+                              <img src={a.url} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          ) : a.type === 'video' ? (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
+                              <Video size={16} className="text-[var(--color-accent)]" />
+                              <span className="text-xs truncate max-w-[100px]">{a.name}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
+                              <FileText size={16} className="text-[var(--color-accent)]" />
+                              <span className="text-xs truncate max-w-[100px]">{a.name}</span>
+                            </div>
+                          )}
+                          <button type="button" onClick={() => removeAttachment(i)} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-400"><X size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <form onSubmit={handleSubmit} className="p-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl flex items-center gap-2">
+                    <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.doc,.docx,.zip" multiple className="hidden" onChange={handleFileSelect} />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all flex-shrink-0" title="Прикрепить файл"><Paperclip size={18} /></button>
+                    <div className="relative flex-shrink-0" ref={emojiPickerRef}>
+                      <button type="button" onClick={() => setEmojiPickerOpen((v) => !v)} className="p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all" title="Эмодзи"><Smile size={18} /></button>
+                      <UnifiedEmojiPicker emojis={emojis} open={emojiPickerOpen} onClose={() => setEmojiPickerOpen(false)} onSelect={(insert) => setInput((prev) => prev + insert)} />
+                    </div>
+                    <input value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 min-w-0 bg-transparent border-none px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-0" placeholder="Написать сообщение..." />
+                    <button
+                      type="submit"
+                      disabled={!input.trim() && attachments.length === 0}
+                      className={`
+                        relative group flex items-center justify-center
+                        p-3 sm:p-3.5 rounded-full text-white
+                        bg-gradient-to-br from-[var(--color-accent)] to-indigo-600
+                        shadow-lg shadow-[var(--color-accent)]/30
+                        hover:shadow-[var(--color-accent)]/50 hover:scale-105 hover:brightness-110
+                        active:scale-95
+                        disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100 disabled:brightness-100
+                        transition-all duration-300 ease-out flex-shrink-0
+                      `}
+                    >
+                      <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <SendHorizontal size={20} className="relative z-10 -rotate-12 group-hover:rotate-0 transition-transform duration-300" />
+                    </button>
+                  </form>
+                </div>
               ) : null}
             </>
           ) : (
@@ -552,6 +1481,34 @@ function MessagesPage({ user, activeChatUser, conversations, chatHistory, loadin
             </div>
           )}
         </div>
+        {showSidebar && activeChatUser && (
+          <SharedContentSidebar
+            media={sharedAttachments.media}
+            files={sharedAttachments.files}
+            links={sharedAttachments.links}
+            activeTab={sidebarTab}
+            onTabChange={setSidebarTab}
+            searchQuery={sidebarSearch}
+            onSearchChange={setSidebarSearch}
+            onClose={() => setShowSidebar(false)}
+            scrollToMessage={scrollToMessage}
+          />
+        )}
+        {showAIPanel && user && (
+          <AIAssistantPanel
+            user={user}
+            activeChatUser={activeChatUser}
+            aiAnalysis={aiAnalysis}
+            aiDraft={aiDraft}
+            aiLoading={aiLoading}
+            onApplyDraft={handleApplyDraft}
+            onRegenerate={fetchAISuggest}
+            onSendDraft={handleSendDraft}
+            onClose={() => setShowAIPanel(false)}
+            onOpenProfile={onOpenProfile}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
       </div>
     </div>
   );
@@ -676,7 +1633,161 @@ function AdminMessages({ setToast }) {
   );
 }
 
-function AdminPanel({ adminTab, setAdminTab, adminTrophies, setAdminTrophies, adminUsers, grantTrophyTarget, setGrantTrophyTarget, setToast, setView, getAvatarUrl, categories, loadCategories, refreshSiteSettings, onPreviewPattern }) {
+function AdminEmojis({ emojis, loadEmojis, setToast }) {
+  const [emojiTab, setEmojiTab] = useState('unicode');
+  const [unicodeValue, setUnicodeValue] = useState('');
+  const [unicodeName, setUnicodeName] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageName, setImageName] = useState('');
+  const [imageCode, setImageCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const imageInputRef = useRef(null);
+
+  const handleAddUnicode = async (e) => {
+    e.preventDefault();
+    if (!unicodeValue.trim() || !unicodeName.trim()) {
+      setToast({ message: 'Введите эмодзи и название', type: 'error' });
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.createEmoji({ type: 'unicode', value: unicodeValue.trim(), name: unicodeName.trim(), code: `:${unicodeName.trim().replace(/\s+/g, '_')}:` });
+      setToast({ message: 'Смайл добавлен', type: 'success' });
+      setUnicodeValue('');
+      setUnicodeName('');
+      loadEmojis?.();
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddImage = async (e) => {
+    e.preventDefault();
+    if (!imagePreview || !imageName.trim()) {
+      setToast({ message: 'Загрузите изображение и укажите код', type: 'error' });
+      return;
+    }
+    const code = imageCode.trim() || `:${imageName.trim().replace(/\s+/g, '_')}:`;
+    const finalCode = code.startsWith(':') ? code : `:${code}`;
+    const finalCode2 = finalCode.endsWith(':') ? finalCode : `${finalCode}:`;
+    setLoading(true);
+    try {
+      await api.createEmoji({ type: 'image', value: imagePreview, name: imageName.trim(), code: finalCode2 });
+      setToast({ message: 'Смайл добавлен', type: 'success' });
+      setImageFile(null);
+      setImagePreview(null);
+      setImageName('');
+      setImageCode('');
+      loadEmojis?.();
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteEmoji = async (id) => {
+    try {
+      await api.deleteEmoji(id);
+      setToast({ message: 'Смайл удалён', type: 'success' });
+      loadEmojis?.();
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка', type: 'error' });
+    }
+  };
+
+  const handleImageFileChange = (e) => {
+    const f = e.target.files?.[0];
+    if (!f || !f.type.startsWith('image/')) {
+      setToast({ message: 'Только изображения', type: 'error' });
+      return;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      setToast({ message: 'Файл до 2 МБ', type: 'error' });
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => { setImagePreview(r.result); setImageFile(f); };
+    r.readAsDataURL(f);
+    e.target.value = '';
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2 pb-4 border-b border-[#30363d]">
+        <button onClick={() => setEmojiTab('unicode')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${emojiTab === 'unicode' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>Unicode</button>
+        <button onClick={() => setEmojiTab('image')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${emojiTab === 'image' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>Изображение</button>
+      </div>
+      {emojiTab === 'unicode' && (
+        <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
+          <h3 className="text-lg font-black text-white mb-4">Добавить Unicode смайл</h3>
+          <form onSubmit={handleAddUnicode} className="space-y-4">
+            <div>
+              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Эмодзи (вставьте символ)</label>
+              <input value={unicodeValue} onChange={(e) => setUnicodeValue(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-3 text-2xl focus:outline-none focus:border-[var(--color-accent)]" placeholder="😀" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Название (для кода :name:)</label>
+              <input value={unicodeName} onChange={(e) => setUnicodeName(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="smile" />
+            </div>
+            <button type="submit" disabled={loading} className="px-6 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">Добавить</button>
+          </form>
+        </div>
+      )}
+      {emojiTab === 'image' && (
+        <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
+          <h3 className="text-lg font-black text-white mb-4">Добавить кастомный смайл</h3>
+          <form onSubmit={handleAddImage} className="space-y-4">
+            <div>
+              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Изображение</label>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => imageInputRef.current?.click()} className="px-4 py-2 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-[#8b949e] hover:text-white hover:border-[var(--color-accent)]/50 transition-colors">
+                  {imagePreview ? 'Изменить' : 'Загрузить'}
+                </button>
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
+                {imagePreview && <img src={imagePreview} alt="" className="w-12 h-12 rounded-lg object-cover border border-[#30363d]" />}
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Название</label>
+              <input value={imageName} onChange={(e) => setImageName(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="pepe_dance" />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Код (опционально, по умолчанию :name:)</label>
+              <input value={imageCode} onChange={(e) => setImageCode(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder=":pepe_dance:" />
+            </div>
+            <button type="submit" disabled={loading} className="px-6 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">Добавить</button>
+          </form>
+        </div>
+      )}
+      <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
+        <h3 className="text-lg font-black text-white mb-4">Все смайлы</h3>
+        {emojis.length === 0 ? (
+          <p className="text-[#8b949e] text-sm">Нет смайлов. Добавьте первый.</p>
+        ) : (
+          <div className="grid grid-cols-6 sm:grid-cols-10 gap-3">
+            {emojis.map((e) => (
+              <div key={e.id} className="p-2 bg-[var(--bg-main)] rounded-lg border border-[#30363d] flex flex-col items-center gap-1 relative group">
+                {e.type === 'unicode' ? (
+                  <span className="text-2xl">{e.value}</span>
+                ) : (
+                  <img src={e.value} alt="" className="w-8 h-8 object-contain" />
+                )}
+                <span className="text-[10px] text-[#8b949e] truncate max-w-full">{e.code}</span>
+                <button type="button" onClick={() => handleDeleteEmoji(e.id)} className="absolute top-1 right-1 p-1 text-red-400 hover:bg-red-500/10 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({ adminTab, setAdminTab, adminTrophies, setAdminTrophies, adminUsers, grantTrophyTarget, setGrantTrophyTarget, setToast, setView, getAvatarUrl, categories, loadCategories, refreshSiteSettings, onPreviewPattern, emojis, loadEmojis }) {
   const [trophyName, setTrophyName] = useState('');
   const [trophyDesc, setTrophyDesc] = useState('');
   const [trophyImage, setTrophyImage] = useState(null);
@@ -938,6 +2049,9 @@ function AdminPanel({ adminTab, setAdminTab, adminTrophies, setAdminTrophies, ad
         <button onClick={() => setAdminTab('messages')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'messages' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
           <MessageSquare size={14} className="inline mr-2" /> Сообщения
         </button>
+        <button onClick={() => setAdminTab('emojis')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'emojis' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
+          <Smile size={14} className="inline mr-2" /> Смайлы
+        </button>
       </div>
 
       {adminTab === 'trophies' && (
@@ -1195,6 +2309,8 @@ function AdminPanel({ adminTab, setAdminTab, adminTrophies, setAdminTrophies, ad
       )}
 
       {adminTab === 'messages' && <AdminMessages setToast={setToast} />}
+
+      {adminTab === 'emojis' && <AdminEmojis emojis={emojis || []} loadEmojis={loadEmojis} setToast={setToast} />}
 
       {adminTab === 'categories' && (
         <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl overflow-hidden">
@@ -1472,6 +2588,53 @@ function ProfileEditModal({ user, onClose, onSave }) {
   );
 }
 
+function ImageViewer({ images, initialIndex, onClose }) {
+  const [index, setIndex] = useState(initialIndex ?? 0);
+
+  useEffect(() => setIndex(initialIndex ?? 0), [initialIndex]);
+
+  const next = useCallback((e) => { e?.stopPropagation(); setIndex((i) => (i + 1) % images.length); }, [images.length]);
+  const prev = useCallback((e) => { e?.stopPropagation(); setIndex((i) => (i - 1 + images.length) % images.length); }, [images.length]);
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [next, prev, onClose]);
+
+  if (!images?.length) return null;
+  const currentSrc = images[index];
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md transition-opacity duration-200" onClick={onClose}>
+      <button type="button" onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50">
+        <X size={24} />
+      </button>
+      <a href={currentSrc} download target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="absolute top-4 right-16 p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50" title="Скачать">
+        <Download size={24} />
+      </a>
+      {images.length > 1 && (
+        <>
+          <button type="button" onClick={prev} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50">
+            <ChevronLeft size={32} />
+          </button>
+          <button type="button" onClick={next} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50">
+            <ChevronRight size={32} />
+          </button>
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1 bg-black/50 rounded-full text-white/80 text-sm font-medium backdrop-blur-sm">
+            {index + 1} / {images.length}
+          </div>
+        </>
+      )}
+      <img key={currentSrc} src={currentSrc} alt="Full view" className="max-w-[95vw] max-h-[95vh] object-contain shadow-2xl" onClick={(e) => e.stopPropagation()} />
+    </div>
+  );
+}
+
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const t = setTimeout(() => onClose(), 3500);
@@ -1501,7 +2664,7 @@ export default function App() {
   const [comments, setComments] = useState([]);
   const [stats, setStats] = useState({ posts: 0, users: 0, display_users: 0, display_messages: 0 });
   const [latestComments, setLatestComments] = useState([]);
-  const [votes, setVotes] = useState({});
+  const [similarThreads, setSimilarThreads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -1511,6 +2674,11 @@ export default function App() {
   const [chatHistory, setChatHistory] = useState([]);
   const [userPosts, setUserPosts] = useState([]);
   const [toast, setToast] = useState(null);
+  const [lightbox, setLightbox] = useState({ open: false, images: [], index: 0 });
+  const openLightbox = useCallback((images, index = 0) => {
+    const validImages = (Array.isArray(images) ? images : images ? [images] : []).filter((img) => img && typeof img === 'string');
+    if (validImages.length > 0) setLightbox({ open: true, images: validImages, index: Math.min(index, validImages.length - 1) });
+  }, []);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedUserPosts, setSelectedUserPosts] = useState([]);
@@ -1519,13 +2687,23 @@ export default function App() {
   const [userProfileTab, setUserProfileTab] = useState('wall');
   const [rankLoading, setRankLoading] = useState(false);
   const [commentImages, setCommentImages] = useState([]);
+  const [commentDraft, setCommentDraft] = useState('');
   const commentImageInputRef = useRef(null);
   const [replyTo, setReplyTo] = useState(null);
   const commentInputRef = useRef(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const emojiPickerRef = useRef(null);
   const [newPostImages, setNewPostImages] = useState([]);
+  const [newPostCoverImage, setNewPostCoverImage] = useState(null);
+  const [newPostAttachments, setNewPostAttachments] = useState([]);
+  const [editingThreadId, setEditingThreadId] = useState(null);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentDraft, setEditingCommentDraft] = useState({ content: '', images: [] });
+  const [editingWallPostId, setEditingWallPostId] = useState(null);
+  const [editingWallPostDraft, setEditingWallPostDraft] = useState({ content: '', images: [], poll_question: '', poll_options: [] });
   const newPostImageInputRef = useRef(null);
+  const newPostCoverInputRef = useRef(null);
+  const newPostAttachmentInputRef = useRef(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [postData, setPostData] = useState({ text: '', images: [], poll: { question: '', options: ['', ''] } });
   const [wallPollMode, setWallPollMode] = useState(false);
@@ -1537,10 +2715,14 @@ export default function App() {
   const wallImageInputRef = useRef(null);
   const wallEmojiPickerRef = useRef(null);
   const wallImageInputRefOther = useRef(null);
+  const wallEditImageInputRef = useRef(null);
   const wallEmojiPickerRefOther = useRef(null);
   const wallContentRefOther = useRef(null);
   const [wallCommentsOpenPostId, setWallCommentsOpenPostId] = useState(null);
   const [wallCommentDrafts, setWallCommentDrafts] = useState({});
+  const [wallShareOpenPostId, setWallShareOpenPostId] = useState(null);
+  const [wallRepostPostId, setWallRepostPostId] = useState(null);
+  const [wallRepostCommentDraft, setWallRepostCommentDraft] = useState('');
   const [adminTab, setAdminTab] = useState('trophies');
   const [adminTrophies, setAdminTrophies] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
@@ -1555,6 +2737,16 @@ export default function App() {
   const [followLoading, setFollowLoading] = useState(false);
   const [activityFeed, setActivityFeed] = useState([]);
   const [siteSettings, setSiteSettings] = useState({ site_name: 'FORUM.LIVE', site_logo: '', site_pattern: '', theme: null });
+  const [emojis, setEmojis] = useState([]);
+
+  const loadEmojis = useCallback(async () => {
+    try {
+      const list = await api.getEmojis();
+      setEmojis(list || []);
+    } catch {
+      setEmojis([]);
+    }
+  }, []);
 
   const loadSiteSettings = useCallback(async () => {
     try {
@@ -1606,12 +2798,38 @@ export default function App() {
   }, [loadUser]);
 
   useEffect(() => {
+    if (view === 'editor') {
+      if (editingThreadId && selectedThread?.id === editingThreadId) {
+        setNewPostCoverImage(selectedThread.cover_image || null);
+        const imgs = selectedThread.images?.length ? selectedThread.images : (selectedThread.image ? [selectedThread.image] : []);
+        setNewPostImages(imgs);
+        setNewPostAttachments(selectedThread.attachments || []);
+      } else if (!editingThreadId) {
+        setNewPostCoverImage(null);
+        setNewPostImages([]);
+        setNewPostAttachments([]);
+      }
+    }
+  }, [view, editingThreadId, selectedThread?.id, selectedThread?.cover_image, selectedThread?.images, selectedThread?.attachments]);
+
+  useEffect(() => {
     loadSiteSettings();
-  }, [loadSiteSettings]);
+    loadEmojis();
+  }, [loadSiteSettings, loadEmojis]);
 
   useEffect(() => {
     document.title = siteSettings.site_name || 'Forum';
   }, [siteSettings.site_name]);
+
+  useEffect(() => {
+    if (!wallShareOpenPostId) return;
+    const h = (e) => {
+      if (e.target.closest('[data-wall-share]')) return;
+      setWallShareOpenPostId(null);
+    };
+    const t = setTimeout(() => document.addEventListener('mousedown', h), 0);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', h); };
+  }, [wallShareOpenPostId]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1656,6 +2874,12 @@ export default function App() {
     }
   }, [selectedThread?.id]);
 
+  useEffect(() => {
+    if (selectedThread?.id) {
+      api.getSimilarThreads(selectedThread.id).then(setSimilarThreads).catch(() => setSimilarThreads([]));
+    } else setSimilarThreads([]);
+  }, [selectedThread?.id]);
+
   const loadConversations = useCallback(async () => {
     if (!user?.id) return;
     setChatLoading(true);
@@ -1687,8 +2911,17 @@ export default function App() {
   }, [loadConversations]);
 
   useEffect(() => {
-    if ((view === 'messages' || view === 'profile') && user?.id) loadConversations();
-  }, [view, user?.id, loadConversations]);
+    let interval;
+    if (view === 'messages' && user?.id && activeChatUser?.id) {
+      loadConversations();
+      loadChatHistory();
+      interval = setInterval(() => { loadConversations(); loadChatHistory(); }, 15000);
+    } else if ((view === 'messages' || view === 'profile') && user?.id) {
+      loadConversations();
+      interval = setInterval(loadConversations, 15000);
+    }
+    return () => clearInterval(interval);
+  }, [view, user?.id, activeChatUser?.id, loadConversations, loadChatHistory]);
 
   useEffect(() => {
     loadChatHistory();
@@ -1715,16 +2948,55 @@ export default function App() {
     setChatHistory([]);
   }, [activeChatUser?.id]);
 
-  const handleSendPrivateMessage = useCallback(async (content) => {
+  const handleSendPrivateMessage = useCallback(async (content, attachments = []) => {
     if (!user?.id || !activeChatUser?.id) return;
+    if (!content?.trim() && (!attachments || attachments.length === 0)) return;
     try {
-      const msg = await api.sendPrivateMessage(user.id, activeChatUser.id, content);
+      const msg = await api.sendPrivateMessage(user.id, activeChatUser.id, content, attachments);
       setChatHistory(prev => [...prev, { ...msg, isMine: true }]);
       loadConversations();
     } catch (err) {
       setToast({ message: err?.message || 'Ошибка отправки', type: 'error' });
     }
-  }, [user?.id, activeChatUser?.id, loadConversations]);
+  }, [user?.id, activeChatUser?.id, loadConversations, setToast]);
+
+  const handleDeletePrivateMessage = useCallback(async (messageId) => {
+    try {
+      await api.deleteMessage(messageId);
+      setChatHistory(prev => prev.filter((m) => m.id !== messageId));
+      loadConversations();
+      setToast({ message: 'Сообщение удалено', type: 'success' });
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка удаления', type: 'error' });
+    }
+  }, [loadConversations]);
+
+  const handleTogglePinMessage = useCallback(async (messageId) => {
+    const prev = chatHistory;
+    setChatHistory((p) => p.map((m) => (m.id === messageId ? { ...m, is_pinned: true } : { ...m, is_pinned: false })));
+    try {
+      const updated = await api.togglePinMessage(messageId);
+      setChatHistory((p) => p.map((m) => (m.id === messageId ? { ...m, ...updated, isMine: m.isMine } : { ...m, is_pinned: false })));
+      setToast({ message: 'Сообщение закреплено', type: 'success' });
+    } catch (err) {
+      setChatHistory(prev);
+      setToast({ message: err?.message || 'Ошибка закрепления', type: 'error' });
+      throw err;
+    }
+  }, [chatHistory]);
+
+  const handleUnpinMessage = useCallback(async (messageId) => {
+    const prev = chatHistory;
+    setChatHistory((p) => p.map((m) => (m.id === messageId ? { ...m, is_pinned: false } : m)));
+    try {
+      await api.unpinMessage(messageId);
+      setToast({ message: 'Закрепление снято', type: 'success' });
+    } catch (err) {
+      setChatHistory(prev);
+      setToast({ message: err?.message || 'Ошибка открепления', type: 'error' });
+      throw err;
+    }
+  }, [chatHistory]);
 
   useEffect(() => {
     if (view === 'profile' && user?.id) {
@@ -1846,30 +3118,14 @@ export default function App() {
     setUser(null);
   };
 
-  const handleVote = async (post, type, e) => {
-    e.stopPropagation();
-    if (!user) {
-      setShowAuth(true);
-      setAuthMode('login');
-      return;
-    }
-    const vote = type === 'up' ? 1 : -1;
-    const prev = votes[post.id] || 0;
-    const newVote = prev === vote ? 0 : vote;
-    setVotes(v => ({ ...v, [post.id]: newVote }));
-    try {
-      const { votes: newTotal } = await api.votePost(post.id, vote);
-      setPosts(prevPosts => prevPosts.map(p => p.id === post.id ? { ...p, votes: newTotal } : p));
-      if (selectedThread?.id === post.id) setSelectedThread((prev) => prev ? { ...prev, votes: newTotal } : null);
-    } catch {
-      setVotes(v => ({ ...v, [post.id]: prev }));
-    }
-  };
-
-  const openThread = async (post) => {
+  const openThread = async (post, fromSearch = false) => {
     setLoading(true);
     try {
-      const full = await api.getPost(post.id);
+      if (fromSearch) api.postHit(post.id);
+      const viewedKey = `forum_viewed_${post.id}`;
+      const skipView = typeof sessionStorage !== 'undefined' && sessionStorage.getItem(viewedKey);
+      const full = await api.getPost(post.id, !!skipView);
+      if (!skipView && typeof sessionStorage !== 'undefined') sessionStorage.setItem(viewedKey, '1');
       setSelectedThread(full);
       setView('thread');
       window.scrollTo(0, 0);
@@ -1911,13 +3167,27 @@ export default function App() {
       return;
     }
     if (!title || !content || !category) return;
+    const isEdit = !!editingThreadId;
     try {
-      await api.createPost(title, content, category, tags, newPostImages);
-      setView('feed');
+      if (isEdit) {
+        await api.updatePost(editingThreadId, { title, content, category, tags, images: newPostImages, cover_image: newPostCoverImage, attachments: newPostAttachments });
+        setView('thread');
+        setEditingThreadId(null);
+        const updated = await api.getPost(editingThreadId);
+        setSelectedThread(updated);
+        loadPosts();
+        loadStats();
+        setToast({ message: 'Изменения сохранены!', type: 'success' });
+      } else {
+        await api.createPost(title, content, category, tags, newPostImages, newPostCoverImage, newPostAttachments);
+        setView('feed');
+        loadPosts();
+        loadStats();
+        setToast({ message: 'Тема опубликована!', type: 'success' });
+      }
       setNewPostImages([]);
-      loadPosts();
-      loadStats();
-      setToast({ message: 'Тема опубликована!', type: 'success' });
+      setNewPostCoverImage(null);
+      setNewPostAttachments([]);
     } catch (err) {
       setToast({ message: err?.message || 'Ошибка', type: 'error' });
     }
@@ -1925,8 +3195,7 @@ export default function App() {
 
   const handleAddComment = async (e) => {
     e.preventDefault();
-    const input = e.target.elements.comment;
-    const content = input?.value?.trim();
+    const content = commentDraft?.trim();
     if ((!content && commentImages.length === 0) || !selectedThread) return;
     if (!user) {
       setShowAuth(true);
@@ -1936,7 +3205,7 @@ export default function App() {
       const comment = await api.addComment(selectedThread.id, content || '', commentImages, replyTo?.id || null);
       const enriched = { ...comment, author_avatar: getAvatarUrl(user), rank: user.rank, rank_color: user.rank_color, likes: 0, liked: false };
       setComments(prev => [...prev, enriched]);
-      input.value = '';
+      setCommentDraft('');
       if (commentInputRef.current) {
         commentInputRef.current.style.height = 'auto';
         commentInputRef.current.style.height = '44px';
@@ -1958,6 +3227,55 @@ export default function App() {
       setComments(prev => prev.map(c => c.id === comment.id ? { ...c, likes, liked: !c.liked } : c));
     } catch {
       setToast({ message: 'Ошибка лайка', type: 'error' });
+    }
+  };
+
+  const handleStartEditComment = (c) => {
+    setEditingCommentId(c.id);
+    const imgs = c.images?.length ? c.images : (c.image ? [c.image] : []);
+    setEditingCommentDraft({ content: c.content || '', images: [...imgs] });
+  };
+
+  const handleSaveComment = async () => {
+    if (!selectedThread || !editingCommentId) return;
+    if (!editingCommentDraft.content?.trim() && editingCommentDraft.images.length === 0) {
+      setToast({ message: 'Введите текст или прикрепите фото', type: 'error' });
+      return;
+    }
+    try {
+      const updated = await api.updateComment(selectedThread.id, editingCommentId, editingCommentDraft.content, editingCommentDraft.images);
+      setComments(prev => prev.map(c => c.id === editingCommentId ? { ...c, content: updated.content, images: updated.images } : c));
+      setEditingCommentId(null);
+      setToast({ message: 'Комментарий сохранён', type: 'success' });
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка', type: 'error' });
+    }
+  };
+
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+  };
+
+  const handleDeleteComment = async (c) => {
+    if (!selectedThread) return;
+    if (!confirm('Удалить комментарий? Вложенные ответы также будут удалены.')) return;
+    try {
+      await api.deleteComment(selectedThread.id, c.id);
+      const idsToRemove = (() => {
+        let ids = new Set([c.id]);
+        let added = true;
+        while (added) {
+          added = false;
+          for (const x of comments) {
+            if (ids.has(x.parent_id) && !ids.has(x.id)) { ids.add(x.id); added = true; }
+          }
+        }
+        return [...ids];
+      })();
+      setComments(prev => prev.filter((x) => !idsToRemove.includes(x.id)));
+      setToast({ message: 'Комментарий удалён', type: 'success' });
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка', type: 'error' });
     }
   };
 
@@ -1987,6 +3305,42 @@ export default function App() {
     }
   };
 
+  const handleStartEditWallPost = (w) => {
+    setEditingWallPostId(w.id);
+    const imgs = w.images?.length ? w.images : (w.image ? [w.image] : []);
+    setEditingWallPostDraft({
+      content: w.content || '',
+      images: [...imgs],
+      poll_question: w.poll_question || '',
+      poll_options: Array.isArray(w.poll_options) ? [...w.poll_options] : [],
+    });
+  };
+
+  const handleSaveWallPost = async () => {
+    if (!profileUserId || !editingWallPostId) return;
+    if (!editingWallPostDraft.content?.trim() && editingWallPostDraft.images.length === 0 && !editingWallPostDraft.poll_question?.trim()) {
+      setToast({ message: 'Введите текст, прикрепите фото или добавьте голосование', type: 'error' });
+      return;
+    }
+    try {
+      const updated = await api.updateWallPost(profileUserId, editingWallPostId, {
+        content: editingWallPostDraft.content,
+        images: editingWallPostDraft.images,
+        poll_question: editingWallPostDraft.poll_question || null,
+        poll_options: editingWallPostDraft.poll_options?.filter(Boolean).length >= 2 ? editingWallPostDraft.poll_options : null,
+      });
+      setWallPosts(prev => prev.map(p => p.id === editingWallPostId ? { ...p, ...updated } : p));
+      setEditingWallPostId(null);
+      setToast({ message: 'Пост сохранён', type: 'success' });
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка', type: 'error' });
+    }
+  };
+
+  const handleCancelEditWallPost = () => {
+    setEditingWallPostId(null);
+  };
+
   const handleWallCommentSubmit = async (postId, content) => {
     if (!user || !profileUserId || !content?.trim()) return;
     try {
@@ -1997,6 +3351,37 @@ export default function App() {
       setToast({ message: err?.message || 'Ошибка', type: 'error' });
     }
   };
+
+  const handleDeleteWallComment = useCallback(async (postId, commentId) => {
+    if (!user || !profileUserId) return;
+    if (!confirm('Удалить комментарий?')) return;
+    try {
+      await api.deleteWallComment(profileUserId, postId, commentId);
+      setWallPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: (p.comments || []).filter(c => c.id !== commentId) } : p));
+      setToast({ message: 'Комментарий удалён', type: 'success' });
+    } catch (err) {
+      setToast({ message: err?.message || 'Ошибка удаления', type: 'error' });
+    }
+  }, [user, profileUserId]);
+
+  const handleRepostWallPost = useCallback(async (w, userComment = '') => {
+    if (!user) { setShowAuth(true); return; }
+    setWallShareOpenPostId(null);
+    if (w.thread_id) {
+      try {
+        const threadImage = w.thread_image || w.image || (w.images?.[0]);
+        await api.postWall(user.id, userComment || '', w.thread_id, w.thread_title || 'Тема', [], null, null, threadImage);
+        setToast({ message: 'Опубликовано в профиле', type: 'success' });
+      } catch (err) {
+        setToast({ message: err?.message || 'Ошибка', type: 'error' });
+      }
+    } else {
+      const url = `${window.location.origin}${window.location.pathname || '/'}?profile=${profileUserId}`;
+      navigator.clipboard.writeText(url).then(() => setToast({ message: 'Ссылка скопирована', type: 'success' })).catch(() => setToast({ message: 'Не удалось скопировать', type: 'error' }));
+    }
+    setWallRepostPostId(null);
+    setWallRepostCommentDraft('');
+  }, [user, profileUserId]);
 
   const handlePostWall = async (e) => {
     e.preventDefault();
@@ -2111,7 +3496,7 @@ export default function App() {
             {searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-block)] border border-[#30363d] rounded-lg shadow-xl overflow-hidden z-50">
                 {searchResults.map(p => (
-                  <div key={p.id} onClick={() => { openThread(p); setSearchResults([]); setSearchQuery(''); }} className="p-3 hover:bg-[#1c2128] cursor-pointer">
+                  <div key={p.id} onClick={() => { openThread(p, true); setSearchResults([]); setSearchQuery(''); }} className="p-3 hover:bg-[#1c2128] cursor-pointer">
                     <div className="font-medium text-white break-all">{p.title}</div>
                     <div className="text-[10px] text-[#8b949e] flex items-center gap-2">
                       <span className="text-[var(--color-accent)]/80">{p.category}</span>
@@ -2152,10 +3537,10 @@ export default function App() {
         </div>
       </header>
 
-      <main className={`max-w-[1400px] mx-auto px-6 md:px-8 py-6 grid grid-cols-1 gap-6 ${view === 'profile' || view === 'admin' || view === 'messages' ? 'lg:grid-cols-1' : 'lg:grid-cols-[250px_1fr_300px]'}`}>
-        <aside className={`hidden space-y-6 ${view === 'profile' || view === 'admin' || view === 'messages' ? 'lg:hidden' : 'lg:block'}`}>
+      <main className={`max-w-[1400px] mx-auto px-6 md:px-8 py-6 grid grid-cols-1 gap-6 ${view === 'profile' || view === 'admin' || view === 'messages' || view === 'settings' ? 'lg:grid-cols-1' : 'lg:grid-cols-[250px_1fr_300px]'}`}>
+        <aside className={`hidden space-y-6 ${view === 'profile' || view === 'admin' || view === 'messages' || view === 'settings' ? 'lg:hidden' : 'lg:block'}`}>
           <button
-            onClick={() => user ? setView('editor') : (setShowAuth(true), setAuthMode('login'))}
+            onClick={() => { if (user) { setEditingThreadId(null); setView('editor'); } else { setShowAuth(true); setAuthMode('login'); } }}
             className="w-full bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 text-[var(--color-accent)] py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[var(--color-accent)] hover:text-black transition-all group"
           >
             <MessageSquarePlus size={18} /> СОЗДАТЬ ТЕМУ
@@ -2208,6 +3593,15 @@ export default function App() {
         </aside>
 
         <section className="space-y-5 min-w-0">
+          {view === 'settings' && (
+            <SettingsPage
+              user={user}
+              setUser={setUser}
+              setToast={setToast}
+              onBack={() => setView('profile')}
+            />
+          )}
+
           {view === 'messages' && (
             <MessagesPage
               user={user}
@@ -2217,7 +3611,15 @@ export default function App() {
               loading={chatLoading}
               onSelectContact={openChatWithUser}
               onSend={handleSendPrivateMessage}
+              onDeleteMessage={handleDeletePrivateMessage}
+              onTogglePin={handleTogglePinMessage}
+              onUnpin={handleUnpinMessage}
+              setToast={setToast}
               getAvatarUrl={getAvatarUrl}
+              openLightbox={openLightbox}
+              emojis={emojis}
+              onOpenProfile={() => { setSelectedUser(null); setView('profile'); }}
+              onOpenSettings={() => setView('settings')}
             />
           )}
 
@@ -2243,7 +3645,7 @@ export default function App() {
                   <div className="p-8 text-center text-[#8b949e]">Нет тем в этом разделе</div>
                 ) : (
                   posts.map(post => (
-                    <PostCard key={post.id} post={post} votes={votes} onVote={handleVote} onClick={openThread} onAuthorClick={openUserProfile} categoryColor={getCategoryStyle(post.category)?.color} />
+                    <PostCard key={post.id} post={post} onClick={openThread} onAuthorClick={openUserProfile} categoryColor={getCategoryStyle(post.category)?.color} onViewImage={openLightbox} />
                   ))
                 )}
               </div>
@@ -2286,13 +3688,23 @@ export default function App() {
               </button>
 
               <div className="bg-[var(--bg-block-glass)] backdrop-blur-xl border border-[#30363d] rounded-xl shadow-2xl">
+                {selectedThread.cover_image && (
+                  <div className="relative w-full h-80 overflow-hidden rounded-t-xl border-b border-white/10 cursor-zoom-in" onClick={() => {
+                    const imgs = (selectedThread.images?.length ? selectedThread.images : (selectedThread.image ? [selectedThread.image] : []));
+                    const all = [selectedThread.cover_image, ...imgs].filter(Boolean);
+                    openLightbox(all, 0);
+                  }}>
+                    <img src={selectedThread.cover_image} alt="" className="w-full h-80 object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-block)] via-transparent to-transparent pointer-events-none" />
+                  </div>
+                )}
                 <div className="p-6 md:p-8 lg:p-10">
                   <div className="flex items-center gap-3 mb-6">
                     <UserLink userId={selectedThread.author_id} username={selectedThread.author} avatarUrl={selectedThread.author_avatar || getAvatarUrl({ username: selectedThread.author })} rank={selectedThread.rank} rankColor={selectedThread.rank_color} size="lg" onClick={openUserProfile} />
                     <p className="text-[11px] text-[#8b949e] font-medium ml-2">{selectedThread.time} • {selectedThread.replies ?? comments.length} сообщений</p>
                   </div>
 
-                  <h1 className="text-xl md:text-2xl font-black text-white leading-tight mb-6 break-all">{selectedThread.title}</h1>
+                  <h1 className="text-xl md:text-2xl font-bold text-white tracking-normal leading-snug mb-6 break-all overflow-hidden">{selectedThread.title}</h1>
                   {selectedThread.tags && (
                     <div className="flex flex-wrap gap-1 mb-4">
                       {selectedThread.tags.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
@@ -2301,41 +3713,92 @@ export default function App() {
                     </div>
                   )}
                   <div className="prose prose-invert prose-emerald max-w-none break-all whitespace-pre-wrap">
-                    <SimpleMarkdown>{selectedThread.content || ''}</SimpleMarkdown>
+                    <SimpleMarkdown emojis={emojis}>{selectedThread.content || ''}</SimpleMarkdown>
                   </div>
+                  {/* Thread Images */}
                   {(() => {
                     const imgs = (selectedThread.images?.length ? selectedThread.images : (selectedThread.image ? [selectedThread.image] : []));
                     if (imgs.length === 0) return null;
+
+                    // Single Image: Banner Style
                     if (imgs.length === 1) return (
-                      <div className="mt-4 overflow-hidden rounded-lg">
-                        <img src={imgs[0]} alt="" className="max-h-80 w-auto object-contain" />
+                      <div className="mt-4 overflow-hidden rounded-xl border border-white/10 shadow-lg group/image">
+                        <img
+                          src={imgs[0]}
+                          onClick={() => openLightbox(imgs, 0)}
+                          alt=""
+                          className="w-full h-80 object-cover cursor-zoom-in transition-transform duration-500 group-hover/image:scale-105"
+                        />
                       </div>
                     );
+
+                    // Multiple Images: Grid
                     return (
-                      <div className={`mt-4 grid gap-2 ${imgs.length === 2 ? 'grid-cols-2' : imgs.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3'}`}>
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {imgs.map((src, i) => (
-                          <div key={i} className="rounded-lg overflow-hidden">
-                            <img src={src} alt="" className="w-full max-h-48 object-cover" />
+                          <div key={i} className="overflow-hidden rounded-lg border border-white/10 group/image">
+                            <img
+                              src={src}
+                              onClick={() => openLightbox(imgs, i)}
+                              alt=""
+                              className="w-full h-48 object-cover cursor-zoom-in transition-transform duration-500 group-hover/image:scale-105"
+                            />
                           </div>
                         ))}
                       </div>
                     );
                   })()}
+                  {(selectedThread.attachments?.length || 0) > 0 && (
+                    <div className="mt-6 pt-6 border-t border-[#30363d]">
+                      <h5 className="text-[10px] font-black text-[#8b949e] uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <FileText size={14} /> Файлы
+                      </h5>
+                      <div className="flex flex-col gap-2">
+                        {selectedThread.attachments.map((a, i) => (
+                          <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors">
+                            <FileText size={20} className="text-[var(--color-accent)] flex-shrink-0" />
+                            <span className="text-sm text-white truncate flex-1">{a.name}</span>
+                            <span className="text-[10px] text-[#8b949e]">{(a.size / 1024).toFixed(1)} KB</span>
+                            <a href={a.data} download={a.name} className="p-2 rounded-lg bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors">
+                              <Download size={16} />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-[var(--bg-main)]/50 p-4 border-t border-[#30363d] flex items-center justify-between">
                   <ThreadActions
                     thread={selectedThread}
                     user={user}
+                    onEdit={() => {
+                      setEditingThreadId(selectedThread.id);
+                      setView('editor');
+                    }}
+                    onDelete={async () => {
+                      if (!confirm('Удалить тему? Это действие нельзя отменить.')) return;
+                      try {
+                        await api.deletePost(selectedThread.id);
+                        setView('feed');
+                        setSelectedThread(null);
+                        loadPosts();
+                        loadStats();
+                        setToast({ message: 'Тема удалена', type: 'success' });
+                      } catch (err) {
+                        setToast({ message: err?.message || 'Ошибка', type: 'error' });
+                      }
+                    }}
                     onCopyLink={() => {
                       const url = `${window.location.origin}${window.location.pathname || '/'}?post=${selectedThread.id}`;
                       navigator.clipboard.writeText(url).then(() => setToast({ message: 'Ссылка скопирована', type: 'success' })).catch(() => setToast({ message: 'Не удалось скопировать', type: 'error' }));
                     }}
-                    onRepost={async () => {
+                    onRepost={async (userComment) => {
                       if (!user) { setShowAuth(true); return; }
                       try {
-                        const link = `${window.location.origin}${window.location.pathname || '/'}?post=${selectedThread.id}`;
-                        await api.postWall(user.id, `Репост: ${selectedThread.title}\n${link}`, selectedThread.id, selectedThread.title);
+                        const threadImage = selectedThread.cover_image || selectedThread.images?.[0] || null;
+                        await api.postWall(user.id, userComment || '', selectedThread.id, selectedThread.title, [], null, null, threadImage);
                         setToast({ message: 'Опубликовано в профиле', type: 'success' });
                       } catch (err) {
                         setToast({ message: err?.message || 'Ошибка', type: 'error' });
@@ -2358,6 +3821,9 @@ export default function App() {
                   }, {});
                   const renderComment = (c, isNested = false) => {
                     const isAuthorOrMod = c.author_id === selectedThread?.author_id || c.rank === 'Модератор';
+                    const canEditComment = user && (c.author_id === user.id || user.is_admin || user.id === 1 || user.username === 'admin_dev');
+                    const isEditing = editingCommentId === c.id;
+                    const draft = isEditing ? editingCommentDraft : null;
                     return (
                   <div key={c.id} className={`bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl p-5 mb-3 transition-all duration-300 hover:bg-white/[0.05] hover:border-white/20 shadow-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.25),0_0_0_1px_rgba(168,85,247,0.08)] group/comment ${isNested ? 'ml-10' : ''} ${isAuthorOrMod ? 'border-l-2 border-l-[var(--color-accent)]' : ''}`}>
                     <div className="flex gap-4 items-start">
@@ -2372,39 +3838,95 @@ export default function App() {
                           {c.rank && <UserBanner rank={c.rank} color={c.rank_color || getRankColor(c.rank)} />}
                           <span className="text-xs text-white/30">{c.time}</span>
                         </div>
-                        <p className="text-white/90 leading-relaxed break-words whitespace-pre-wrap">{c.content}</p>
-                        {(() => {
-                          const imgs = (c.images?.length ? c.images : (c.image ? [c.image] : []));
-                          if (imgs.length === 0) return null;
-                          if (imgs.length === 1) return (
-                            <div className="mt-3 overflow-hidden max-w-xs rounded-lg">
-                              <img src={imgs[0]} alt="" className="max-h-48 w-auto object-contain" />
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            <textarea
+                              value={draft?.content ?? ''}
+                              onChange={(e) => setEditingCommentDraft(prev => ({ ...prev, content: e.target.value }))}
+                              className="w-full min-h-[80px] py-2 px-3 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[var(--color-accent)] resize-none"
+                              placeholder="Текст комментария..."
+                            />
+                            {draft?.images?.length > 0 && (
+                              <div className="flex gap-2 flex-wrap">
+                                {draft.images.map((src, i) => (
+                                  <div key={i} className="relative flex-shrink-0">
+                                    <img src={src} alt="" className="w-16 h-16 rounded-lg object-cover ring-1 ring-white/10" />
+                                    <button type="button" onClick={() => setEditingCommentDraft(prev => ({ ...prev, images: prev.images.filter((_, j) => j !== i) }))} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-400 transition-colors"><X size={10} /></button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={handleSaveComment} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-accent)] text-black rounded-lg text-xs font-bold hover:opacity-90">
+                                <Save size={14} /> Сохранить
+                              </button>
+                              <button type="button" onClick={handleCancelEditComment} className="flex items-center gap-1.5 px-3 py-1.5 text-[#8b949e] hover:text-white rounded-lg text-xs font-bold">
+                                <X size={14} /> Отмена
+                              </button>
                             </div>
-                          );
-                          return (
-                            <div className={`mt-3 grid gap-2 ${imgs.length === 2 ? 'grid-cols-2' : imgs.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3'}`}>
-                              {imgs.map((src, i) => (
-                                <div key={i} className="rounded-lg overflow-hidden">
-                                  <img src={src} alt="" className="w-full max-h-40 object-cover" />
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-white/90 leading-relaxed break-words whitespace-pre-wrap"><ContentWithEmojis text={c.content} emojis={emojis} /></p>
+                            {/* Comment Images */}
+                            {(() => {
+                              const imgs = (c.images?.length ? c.images : (c.image ? [c.image] : []));
+                              if (imgs.length === 0) return null;
+
+                              // Single Image: Small Thumbnail
+                              if (imgs.length === 1) return (
+                                <div className="mt-2 overflow-hidden rounded-lg border border-white/10 group/image max-w-xs">
+                                  <img
+                                    src={imgs[0]}
+                                    onClick={(e) => { e.stopPropagation(); openLightbox(imgs, 0); }}
+                                    alt=""
+                                    className="w-48 h-32 object-cover cursor-zoom-in transition-transform duration-500 group-hover/image:scale-105"
+                                  />
                                 </div>
-                              ))}
+                              );
+
+                              // Multiple Images: Tiny Grid
+                              return (
+                                <div className="mt-2 grid grid-cols-3 gap-1 max-w-xs">
+                                  {imgs.map((src, i) => (
+                                    <div key={i} className="overflow-hidden rounded-md border border-white/5 group/image">
+                                      <img
+                                        src={src}
+                                        onClick={(e) => { e.stopPropagation(); openLightbox(imgs, i); }}
+                                        alt=""
+                                        className="w-20 h-20 object-cover cursor-zoom-in transition-transform duration-500 group-hover/image:scale-105"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </>
+                        )}
+                        {!isEditing && (
+                        <div className="flex items-center justify-between mt-3 pt-3 bg-white/[0.02] rounded-lg -mx-1 px-3 -mb-1 opacity-50 group-hover/comment:opacity-100 transition-opacity duration-300">
+                          <div className="flex items-center gap-4">
+                            <button type="button" onClick={() => { setReplyTo({ id: c.id, author: c.author }); setTimeout(() => commentInputRef.current?.focus(), 0); }} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-400 transition-colors duration-300">
+                              <MessageCircle size={10} />
+                              Ответить
+                            </button>
+                            <button type="button" onClick={() => handleLikeComment(c)} className={`flex items-center gap-1.5 text-xs transition-colors duration-300 ${c.liked ? 'text-red-500' : 'text-gray-500 hover:text-blue-400'}`}>
+                              <Heart size={10} className={c.liked ? 'fill-current' : ''} />
+                              {c.likes ?? 0}
+                            </button>
+                          </div>
+                          {canEditComment && (
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => handleStartEditComment(c)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors" title="Редактировать">
+                                <Pencil size={14} />
+                              </button>
+                              <button type="button" onClick={() => handleDeleteComment(c)} className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors" title="Удалить">
+                                <Trash2 size={14} />
+                              </button>
                             </div>
-                          );
-                        })()}
-                        <div className="flex items-center gap-4 mt-3 pt-3 bg-white/[0.02] rounded-lg -mx-1 px-3 -mb-1 opacity-50 group-hover/comment:opacity-100 transition-opacity duration-300">
-                          <button type="button" onClick={() => { setReplyTo({ id: c.id, author: c.author }); setTimeout(() => commentInputRef.current?.focus(), 0); }} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-400 transition-colors duration-300">
-                            <MessageCircle size={10} />
-                            Ответить
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleLikeComment(c)}
-                            className={`flex items-center gap-1.5 text-xs transition-colors duration-300 ${c.liked ? 'text-red-500' : 'text-gray-500 hover:text-blue-400'}`}
-                          >
-                            <Heart size={10} className={c.liked ? 'fill-current' : ''} />
-                            {c.likes ?? 0}
-                          </button>
+                          )}
                         </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2440,12 +3962,14 @@ export default function App() {
                             <textarea
                               ref={commentInputRef}
                               name="comment"
-                              rows={1}
-                              onInput={(e) => {
+                              value={commentDraft}
+                              onChange={(e) => {
+                                setCommentDraft(e.target.value);
                                 const ta = e.target;
                                 ta.style.height = 'auto';
                                 ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
                               }}
+                              rows={1}
                               className="w-full min-h-[44px] max-h-[200px] py-3 px-3 bg-transparent border-none focus:ring-0 focus:outline-none resize-none text-sm text-white placeholder:text-white/20 overflow-y-auto"
                               placeholder={replyTo ? `Ответить ${replyTo.author}...` : 'Написать ответ...'}
                             />
@@ -2465,29 +3989,34 @@ export default function App() {
                               <button type="button" onClick={() => commentImageInputRef.current?.click()} className="bg-white/5 p-2 rounded-lg hover:bg-white/10 text-[#8b949e] hover:text-white transition-all duration-300 cursor-pointer" title="Прикрепить фото"><Paperclip size={14} /></button>
                               <div className="relative" ref={emojiPickerRef}>
                                 <button type="button" onClick={() => setEmojiPickerOpen(v => !v)} className="bg-white/5 p-2 rounded-lg hover:bg-white/10 text-[#8b949e] hover:text-white transition-all duration-300 cursor-pointer" title="Эмодзи"><Smile size={14} /></button>
-                                {emojiPickerOpen && (
-                                  <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setEmojiPickerOpen(false)} aria-hidden />
-                                    <div className="absolute bottom-full left-0 mb-1 w-[600px] max-w-[min(42rem,calc(100vw-2rem))] p-5 bg-[var(--bg-block)] border border-white/10 rounded-xl shadow-xl z-50 grid grid-cols-12 gap-3 max-h-64 overflow-y-auto">
-                                      {['😀','😊','😂','👍','❤️','😍','🤔','😎','🎉','😅','🔥','✨','👏','🙏','💪','😢','🤗','😇','🥳','😤'].map((emo, i) => (
-                                        <button key={i} type="button" onClick={() => {
-                                          const ta = commentInputRef.current;
-                                          if (ta) {
-                                            const start = ta.selectionStart, end = ta.selectionEnd;
-                                            const text = ta.value;
-                                            ta.value = text.slice(0, start) + emo + text.slice(end);
-                                            ta.selectionStart = ta.selectionEnd = start + emo.length;
-                                            ta.focus();
-                                          }
-                                          setEmojiPickerOpen(false);
-                                        }} className="w-10 h-10 flex items-center justify-center text-xl hover:bg-white/10 rounded transition-colors">{emo}</button>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
+                                <UnifiedEmojiPicker emojis={emojis} open={emojiPickerOpen} onClose={() => setEmojiPickerOpen(false)} onSelect={(insert) => {
+                                  const ta = commentInputRef.current;
+                                  if (ta) {
+                                    const start = ta.selectionStart, end = ta.selectionEnd;
+                                    ta.value = ta.value.slice(0, start) + insert + ta.value.slice(end);
+                                    ta.selectionStart = ta.selectionEnd = start + insert.length;
+                                    ta.focus();
+                                  }
+                                }} className="w-[600px] max-w-[min(42rem,calc(100vw-2rem))]" />
                               </div>
                             </div>
-                            <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white flex items-center gap-2 transition-colors shrink-0 ml-4"><Send size={14} /> Отправить</button>
+                            <button
+                              type="submit"
+                              disabled={!commentDraft.trim() && commentImages.length === 0}
+                              className={`
+                                relative group flex items-center justify-center
+                                p-3 sm:p-3.5 rounded-full text-white
+                                bg-gradient-to-br from-[var(--color-accent)] to-indigo-600
+                                shadow-lg shadow-[var(--color-accent)]/30
+                                hover:shadow-[var(--color-accent)]/50 hover:scale-105 hover:brightness-110
+                                active:scale-95
+                                disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100 disabled:brightness-100
+                                transition-all duration-300 ease-out shrink-0 ml-4
+                              `}
+                            >
+                              <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <SendHorizontal size={20} className="relative z-10 -rotate-12 group-hover:rotate-0 transition-transform duration-300" />
+                            </button>
                           </footer>
                         </div>
                       </div>
@@ -2517,21 +4046,41 @@ export default function App() {
           {view === 'editor' && (
             <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl overflow-hidden shadow-2xl">
               <div className="p-4 border-b border-[#30363d] bg-[var(--bg-main)]/50 flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-widest text-white">Новое обсуждение</span>
-                <button onClick={() => setView('feed')} className="text-[#484f58] hover:text-white transition-colors"><X size={20} /></button>
+                <span className="text-xs font-black uppercase tracking-widest text-white">{editingThreadId ? 'Редактировать тему' : 'Новое обсуждение'}</span>
+                <button onClick={() => { setEditingThreadId(null); setView(editingThreadId ? 'thread' : 'feed'); }} className="text-[#484f58] hover:text-white transition-colors"><X size={20} /></button>
               </div>
-              <form onSubmit={handlePublish} className="p-6 md:p-8 space-y-4">
-                <input name="title" className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg p-3 text-lg font-bold text-white focus:outline-none focus:border-[var(--color-accent)] transition-all" placeholder="Заголовок темы..." required />
+              <form key={editingThreadId ? `edit-${editingThreadId}` : 'new'} onSubmit={handlePublish} className="p-6 md:p-8 space-y-4">
+                <input name="title" defaultValue={editingThreadId && selectedThread?.id === editingThreadId ? selectedThread.title : ''} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg p-3 text-lg font-bold text-white focus:outline-none focus:border-[var(--color-accent)] transition-all" placeholder="Заголовок темы..." required />
+                <div>
+                  <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Обложка темы (баннер)</label>
+                  {newPostCoverImage ? (
+                    <div className="relative rounded-xl overflow-hidden border border-[#30363d] bg-[var(--bg-main)]">
+                      <img src={newPostCoverImage} alt="" className="w-full max-h-48 object-cover" />
+                      <button type="button" onClick={() => setNewPostCoverImage(null)} className="absolute top-2 right-2 w-8 h-8 bg-red-500/90 rounded-lg flex items-center justify-center text-white hover:bg-red-500"><X size={16} /></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => newPostCoverInputRef.current?.click()} className="w-full h-24 rounded-xl border-2 border-dashed border-[#30363d] hover:border-[var(--color-accent)]/50 flex items-center justify-center gap-2 text-[#8b949e] hover:text-[var(--color-accent)] transition-all">
+                      <Image size={24} /> Загрузить обложку
+                    </button>
+                  )}
+                  <input ref={newPostCoverInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f || f.size > 5 * 1024 * 1024) { setToast({ message: 'Изображение до 5 МБ', type: 'error' }); return; }
+                    const r = new FileReader(); r.onload = () => setNewPostCoverImage(r.result); r.readAsDataURL(f);
+                    e.target.value = '';
+                  }} />
+                </div>
                 <div className="flex gap-2 flex-wrap">
-                  <select name="category" className="bg-[var(--bg-main)] border border-[#30363d] rounded px-3 py-1.5 text-xs font-bold text-[var(--color-accent)]" required>
+                  <select name="category" defaultValue={editingThreadId && selectedThread?.id === editingThreadId ? selectedThread.category : ''} className="bg-[var(--bg-main)] border border-[#30363d] rounded px-3 py-1.5 text-xs font-bold text-[var(--color-accent)]" required>
                     <option value="">Выбрать раздел</option>
                     {(categories.filter(c => DIRECT_POST_CATEGORIES.includes(c.id)).length ? categories.filter(c => DIRECT_POST_CATEGORIES.includes(c.id)) : DIRECT_POST_CATEGORIES.map(id => ({ id, name: id }))).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                  <input name="tags" className="flex-1 min-w-[120px] bg-[var(--bg-main)] border border-[#30363d] rounded px-3 py-1.5 text-xs text-[#8b949e]" placeholder="Теги (через запятую)..." />
+                  <input name="tags" defaultValue={editingThreadId && selectedThread?.id === editingThreadId ? (selectedThread.tags || '') : ''} className="flex-1 min-w-[120px] bg-[var(--bg-main)] border border-[#30363d] rounded px-3 py-1.5 text-xs text-[#8b949e]" placeholder="Теги (через запятую)..." />
                 </div>
-                <textarea name="content" className="w-full h-64 bg-[var(--bg-main)] border border-[#30363d] rounded-lg p-4 text-sm text-[#c9d1d9] resize-none focus:outline-none focus:border-[var(--color-accent)]" placeholder="Напишите содержимое здесь... (Поддерживается Markdown)" required />
-                <div className="flex items-center gap-2">
+                <textarea name="content" defaultValue={editingThreadId && selectedThread?.id === editingThreadId ? (selectedThread.content || '') : ''} className="w-full h-64 bg-[var(--bg-main)] border border-[#30363d] rounded-lg p-4 text-sm text-[#c9d1d9] resize-none focus:outline-none focus:border-[var(--color-accent)]" placeholder="Напишите содержимое здесь... (Поддерживается Markdown)" required />
+                <div className="flex items-center gap-2 flex-wrap">
                   <button type="button" onClick={() => newPostImageInputRef.current?.click()} className="p-2 rounded-lg border border-[#30363d] hover:border-[var(--color-accent)]/50 text-[#8b949e] hover:text-[var(--color-accent)] transition-colors" title="Прикрепить фото"><Image size={18} /></button>
+                  <button type="button" onClick={() => newPostAttachmentInputRef.current?.click()} className="p-2 rounded-lg border border-[#30363d] hover:border-[var(--color-accent)]/50 text-[#8b949e] hover:text-[var(--color-accent)] transition-colors" title="Прикрепить файл"><Paperclip size={18} /></button>
                   <input ref={newPostImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
                     const files = [...(e.target.files || [])];
                     const valid = files.filter(f => f.size <= 5 * 1024 * 1024);
@@ -2544,7 +4093,35 @@ export default function App() {
                     }))).then(urls => setNewPostImages(prev => [...prev, ...urls].slice(0, 10)));
                     e.target.value = '';
                   }} />
+                  <input ref={newPostAttachmentInputRef} type="file" accept=".zip,.rar,.7z,.tar,.gz,.pdf,.txt,.js,.ts,.json,.md,.py,.java,.cpp,.c,.h,.css,.html,.xml" multiple className="hidden" onChange={(e) => {
+                    const files = [...(e.target.files || [])];
+                    const MAX = 5 * 1024 * 1024;
+                    const valid = files.filter(f => f.size <= MAX);
+                    if (files.length !== valid.length) setToast({ message: 'Файлы до 5 МБ каждый', type: 'error' });
+                    if (valid.length === 0) return;
+                    Promise.all(valid.map(f => new Promise((res) => {
+                      const r = new FileReader();
+                      r.onload = () => res({ name: f.name, type: f.type, size: f.size, data: r.result });
+                      r.readAsDataURL(f);
+                    }))).then(items => setNewPostAttachments(prev => [...prev, ...items].slice(0, 10)));
+                    e.target.value = '';
+                  }} />
                 </div>
+                {newPostAttachments.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black text-[#8b949e] uppercase">Прикреплённые файлы</span>
+                    <div className="flex flex-col gap-2">
+                      {newPostAttachments.map((a, i) => (
+                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-main)] border border-[#30363d]">
+                          <FileText size={18} className="text-[var(--color-accent)] flex-shrink-0" />
+                          <span className="text-sm text-white truncate flex-1">{a.name}</span>
+                          <span className="text-[10px] text-[#8b949e]">{(a.size / 1024).toFixed(1)} KB</span>
+                          <button type="button" onClick={() => setNewPostAttachments(prev => prev.filter((_, j) => j !== i))} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded"><X size={14} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {newPostImages.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide py-2">
                     {newPostImages.map((src, i) => (
@@ -2556,8 +4133,10 @@ export default function App() {
                   </div>
                 )}
                 <div className="flex justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => setView('feed')} className="px-6 py-2 text-sm font-bold text-[#8b949e] hover:text-white transition-colors">ОТМЕНА</button>
-                  <button type="submit" className="bg-[var(--color-accent)] text-black px-8 py-2 rounded-lg font-black text-xs hover:bg-[color:var(--color-accent)]/90 transition-all shadow-lg shadow-[var(--color-accent)]/20">ОПУБЛИКОВАТЬ</button>
+                  <button type="button" onClick={() => { setEditingThreadId(null); setView(editingThreadId ? 'thread' : 'feed'); }} className="px-6 py-2 text-sm font-bold text-[#8b949e] hover:text-white transition-colors">ОТМЕНА</button>
+                  <button type="submit" className="bg-[var(--color-accent)] text-black px-8 py-2 rounded-lg font-black text-xs hover:bg-[color:var(--color-accent)]/90 transition-all shadow-lg shadow-[var(--color-accent)]/20 flex items-center gap-2">
+                    {editingThreadId ? <><Save size={16} /> Сохранить изменения</> : 'ОПУБЛИКОВАТЬ'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -2579,6 +4158,8 @@ export default function App() {
               loadCategories={loadCategories}
               refreshSiteSettings={loadSiteSettings}
               onPreviewPattern={(p) => setSiteSettings(s => ({ ...s, site_pattern: p || '' }))}
+              emojis={emojis}
+              loadEmojis={loadEmojis}
             />
           )}
 
@@ -2662,16 +4243,23 @@ export default function App() {
                       </div>
                     </div>
                     {!selectedUser && (
-                      <button onClick={() => setShowProfileEdit(true)} type="button" className="w-full mt-4 flex items-center justify-center gap-2 h-10 px-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg transition-all text-sm font-medium">
-                        <Pencil size={16} className="w-4 h-4" /> Редактировать
-                      </button>
+                      <>
+                        <button onClick={() => setShowProfileEdit(true)} type="button" className="w-full mt-4 flex items-center justify-center gap-2 h-10 px-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg transition-all text-sm font-medium">
+                          <Pencil size={16} className="w-4 h-4" /> Редактировать
+                        </button>
+                        <button onClick={() => setView('settings')} type="button" className="w-full mt-2 flex items-center justify-center gap-2 h-10 px-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg transition-all text-sm font-medium">
+                          <Settings size={16} className="w-4 h-4" /> Настройки
+                        </button>
+                      </>
                     )}
                     {user && selectedUser && selectedUser.id !== user.id && (
                       <div className="flex flex-col gap-3 w-full mt-4">
                         <button
                           type="button"
                           onClick={() => handleStartChat(selectedUser)}
-                          className="w-full h-11 rounded-lg flex items-center justify-center gap-2 bg-[var(--color-accent)] hover:opacity-90 text-white transition-all text-sm font-medium"
+                          disabled={!selectedUser?.can_message}
+                          className={`w-full h-11 rounded-lg flex items-center justify-center gap-2 transition-all text-sm font-medium ${!selectedUser?.can_message ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-[var(--color-accent)] hover:opacity-90 text-white'}`}
+                          title={!selectedUser?.can_message ? 'Пользователь закрыл приём сообщений' : ''}
                         >
                           <MessageSquare size={16} className="w-4 h-4" /> Написать сообщение
                         </button>
@@ -2737,32 +4325,42 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                  <div className="bg-[var(--bg-widget-glass)] backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-xl shadow-black/20" style={{ boxShadow: 'inset 0 0 15px rgba(255,255,255,0.02), 0 20px 25px -5px rgba(0, 0, 0, 0.2)' }}>
-                    <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                      <h4 className="text-[10px] font-extrabold text-[var(--color-accent)] uppercase tracking-[0.2em] flex items-center">
-                        ПОДПИСКИ
-                        <span className="ml-2 px-2 py-0.5 bg-[var(--color-accent)]/20 text-[var(--color-accent)] text-[10px] rounded-full font-bold">{(selectedUser ? selectedUserSubscriptions : subscriptions).length}</span>
-                      </h4>
-                      {(selectedUser ? selectedUserSubscriptions : subscriptions).length > 0 && (
-                        <button type="button" onClick={() => selectedUser ? setUserProfileTab('subscriptions') : setProfileTab('subscriptions')} className="text-[10px] font-bold text-[var(--color-accent)] hover:underline">
-                          Смотреть всех
-                        </button>
-                      )}
+                  <div className="bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.2)]">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[10px] font-black tracking-widest text-gray-400 uppercase">ПОДПИСКИ</h3>
+                        <span className="px-1.5 py-0.5 rounded-full bg-white/5 text-[10px] text-gray-400 border border-white/10">{(selectedUser ? selectedUserSubscriptions : subscriptions).length}</span>
+                      </div>
+                      <button type="button" onClick={() => { const subs = selectedUser ? selectedUserSubscriptions : subscriptions; if (subs.length > 0) selectedUser ? setUserProfileTab('subscriptions') : setProfileTab('subscriptions'); }} className="text-[10px] text-gray-500 hover:text-white transition-colors flex items-center gap-0.5 group/all">
+                        Смотреть всех
+                        <ChevronRight size={10} className="group-hover/all:translate-x-0.5 transition-transform" />
+                      </button>
                     </div>
-                    <div className="p-4">
+                    <div className="space-y-2">
                       {(selectedUser ? selectedUserSubscriptions : subscriptions).length === 0 ? (
                         <p className="text-[11px] text-gray-500">Нет подписок</p>
                       ) : (
-                        <div className="grid grid-cols-4 gap-2">
-                          {(selectedUser ? selectedUserSubscriptions : subscriptions).slice(0, 8).map(s => (
-                            <button key={s.id} type="button" onClick={() => openUserProfile(s.id)} className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/5 hover:scale-105 hover:brightness-110 transition-all duration-200" title={s.username}>
-                              <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-white/10">
-                                <img src={s.avatar} alt="" className="w-full h-full object-cover" />
+                        (selectedUser ? selectedUserSubscriptions : subscriptions).slice(0, 8).map(s => (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer group border border-transparent hover:border-white/10"
+                            onClick={() => openUserProfile(s.id)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="relative flex-shrink-0">
+                                <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/10 group-hover:ring-[var(--color-accent)]/40 transition-all">
+                                  <img src={s.avatar} alt="" className="w-full h-full object-cover" />
+                                </div>
+                                <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#0a0a0a] ${s.is_online ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-500'}`} title={s.is_online ? 'В сети' : 'Офлайн'} />
                               </div>
-                              <span className="text-[10px] font-medium text-white truncate w-full text-center">{s.username}</span>
-                            </button>
-                          ))}
-                        </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-semibold text-white group-hover:text-[var(--color-accent)] transition-colors truncate">{s.username}</span>
+                                <span className={`text-[10px] uppercase tracking-tighter ${getRankColor(s.rank)}`}>{s.rank || 'Юзер'}</span>
+                              </div>
+                            </div>
+                            <ArrowUpRight size={14} className="text-gray-600 opacity-0 group-hover:opacity-100 group-hover:text-white transition-all -translate-x-2 group-hover:translate-x-0 flex-shrink-0" />
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -2864,24 +4462,14 @@ export default function App() {
                                   <button type="button" onClick={() => wallImageInputRef.current?.click()} className="bg-white/5 p-2 rounded-lg hover:bg-white/10 text-[#8b949e] hover:text-white transition-all duration-300 cursor-pointer flex-shrink-0" title="Изображение"><Image size={14} /></button>
                                   <div className="relative flex-shrink-0" ref={wallEmojiPickerRef}>
                                     <button type="button" onClick={() => setWallEmojiPickerOpen(v => !v)} className="bg-white/5 p-2 rounded-lg hover:bg-white/10 text-[#8b949e] hover:text-white transition-all duration-300 cursor-pointer" title="Эмодзи"><Smile size={14} /></button>
-                                    {wallEmojiPickerOpen && (
-                                      <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setWallEmojiPickerOpen(false)} aria-hidden />
-                                        <div className="absolute bottom-full left-0 mb-1 w-[600px] max-w-[min(42rem,calc(100vw-2rem))] p-5 bg-[var(--bg-block)] border border-white/10 rounded-xl shadow-xl z-50 grid grid-cols-12 gap-3 max-h-64 overflow-y-auto">
-                                          {['😀','😊','😂','👍','❤️','😍','🤔','😎','🎉','😅','🔥','✨','👏','🙏','💪','😢','🤗','😇','🥳','😤'].map((emo, i) => (
-                                            <button key={i} type="button" onClick={() => {
-                                              const ta = wallInputRef.current;
-                                              if (ta) {
-                                                const start = ta.selectionStart, end = ta.selectionEnd;
-                                                setPostData(prev => ({ ...prev, text: prev.text.slice(0, start) + emo + prev.text.slice(end) }));
-                                                setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + emo.length; ta.focus(); }, 0);
-                                              }
-                                              setWallEmojiPickerOpen(false);
-                                            }} className="w-10 h-10 flex items-center justify-center text-xl hover:bg-white/10 rounded transition-colors">{emo}</button>
-                                          ))}
-                                        </div>
-                                      </>
-                                    )}
+                                    <UnifiedEmojiPicker emojis={emojis} open={wallEmojiPickerOpen} onClose={() => setWallEmojiPickerOpen(false)} onSelect={(insert) => {
+                                      const ta = wallInputRef.current;
+                                      if (ta) {
+                                        const start = ta.selectionStart, end = ta.selectionEnd;
+                                        setPostData(prev => ({ ...prev, text: prev.text.slice(0, start) + insert + prev.text.slice(end) }));
+                                        setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + insert.length; ta.focus(); }, 0);
+                                      }
+                                    }} className="w-[600px] max-w-[min(42rem,calc(100vw-2rem))]" />
                                   </div>
                                   {!selectedUser && (
                                     <button type="button" onClick={() => setWallPollMode(v => !v)} className={`bg-white/5 p-2 rounded-lg hover:bg-white/10 flex items-center gap-2 text-xs transition-all duration-300 cursor-pointer flex-shrink-0 ${wallPollMode ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]' : 'text-white/70 hover:text-white'}`} title="Добавить голосование"><List size={14} /> <span>Голосование</span></button>
@@ -2962,25 +4550,15 @@ export default function App() {
                                   <button type="button" onClick={() => wallImageInputRefOther.current?.click()} className="bg-white/5 p-2 rounded-lg hover:bg-white/10 text-[#8b949e] hover:text-white transition-all duration-300 cursor-pointer" title="Изображение"><Image size={14} /></button>
                                   <div className="relative" ref={wallEmojiPickerRefOther}>
                                     <button type="button" onClick={() => setWallEmojiPickerOpenOther(v => !v)} className="bg-white/5 p-2 rounded-lg hover:bg-white/10 text-[#8b949e] hover:text-white transition-all duration-300 cursor-pointer" title="Эмодзи"><Smile size={14} /></button>
-                                    {wallEmojiPickerOpenOther && (
-                                      <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setWallEmojiPickerOpenOther(false)} aria-hidden />
-                                        <div className="absolute bottom-full left-0 mb-1 w-[600px] max-w-[min(42rem,calc(100vw-2rem))] p-5 bg-[var(--bg-block)] border border-white/10 rounded-xl shadow-xl z-50 grid grid-cols-12 gap-3 max-h-64 overflow-y-auto">
-                                          {['😀','😊','😂','👍','❤️','😍','🤔','😎','🎉','😅','🔥','✨','👏','🙏','💪','😢','🤗','😇','🥳','😤'].map((emo, i) => (
-                                            <button key={i} type="button" onClick={() => {
-                                              const ta = wallContentRefOther.current;
-                                              if (ta) {
-                                                const start = ta.selectionStart, end = ta.selectionEnd;
-                                                setWallInputOther(prev => prev.slice(0, start) + emo + prev.slice(end));
-                                                ta.focus();
-                                                requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = start + emo.length; });
-                                              }
-                                              setWallEmojiPickerOpenOther(false);
-                                            }} className="w-10 h-10 flex items-center justify-center text-xl hover:bg-white/10 rounded transition-colors">{emo}</button>
-                                          ))}
-                                        </div>
-                                      </>
-                                    )}
+                                    <UnifiedEmojiPicker emojis={emojis} open={wallEmojiPickerOpenOther} onClose={() => setWallEmojiPickerOpenOther(false)} onSelect={(insert) => {
+                                      const ta = wallContentRefOther.current;
+                                      if (ta) {
+                                        const start = ta.selectionStart, end = ta.selectionEnd;
+                                        setWallInputOther(prev => prev.slice(0, start) + insert + prev.slice(end));
+                                        ta.focus();
+                                        requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = start + insert.length; });
+                                      }
+                                    }} className="w-[600px] max-w-[min(42rem,calc(100vw-2rem))]" />
                                   </div>
                                 </div>
                                 <button type="submit" disabled={!wallInputOther.trim() && wallImagesOther.length === 0} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white flex items-center gap-2 transition-colors shrink-0 ml-4 disabled:opacity-50 disabled:cursor-not-allowed"><Send size={14} /> Опубликовать</button>
@@ -3015,6 +4593,8 @@ export default function App() {
                           <div className="space-y-6">
                             {wallPosts.map(w => {
                               const isProfileOwner = (w.author_id === profileUserId) || (w.user_id === profileUserId && w.author_id === w.user_id);
+                              const canEditWallPost = user && (w.author_id === user.id || user.is_admin || user.id === 1 || user.username === 'admin_dev');
+                              const isEditingWall = editingWallPostId === w.id;
                               const avatarSrc = isProfileOwner ? getWallAvatarUrl(selectedUser || user) : (w.author_avatar && !isPlaceholderUrl(w.author_avatar) ? w.author_avatar : null);
                               const rawImgList = w.image ? [w.image] : (Array.isArray(w.images) ? w.images : (w.attachments?.[0] ? [w.attachments[0]] : []));
                               const images = rawImgList.filter(src => src && typeof src === 'string' && !src.includes('unsplash') && !src.includes('placeholder') && !src.includes('yandex') && !src.includes('dicebear') && (src.startsWith('data:') || src.startsWith('http')));
@@ -3026,7 +4606,7 @@ export default function App() {
                               const commentsExpanded = wallCommentsOpenPostId === w.id;
                               const commentDraft = wallCommentDrafts[w.id] ?? '';
                               return (
-                              <div key={w.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden mb-6 shadow-2xl">
+                              <div key={w.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl mb-6 shadow-2xl">
                                 <div className="p-6">
                                   <div className="flex items-center gap-3 mb-4">
                                     <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-white/5">
@@ -3037,12 +4617,85 @@ export default function App() {
                                       <span className="text-[11px] text-white/50 ml-2">{w.time}</span>
                                     </div>
                                   </div>
-                                  {(w.content || '').trim() && <p className="text-sm text-white/90 whitespace-pre-wrap break-words mb-4">{w.content}</p>}
-                                  {images.map((src, i) => (
-                                    <div key={i} className="rounded-2xl overflow-hidden border border-white/5 shadow-inner mt-4">
-                                      <img src={src} className="w-full h-auto max-h-[500px] object-cover" alt="Post content" />
+                                  {isEditingWall ? (
+                                    <div className="space-y-4 mb-4">
+                                      <textarea
+                                        value={editingWallPostDraft.content}
+                                        onChange={(e) => setEditingWallPostDraft(prev => ({ ...prev, content: e.target.value }))}
+                                        className="w-full min-h-[100px] py-2 px-3 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[var(--color-accent)] resize-none"
+                                        placeholder="Текст поста..."
+                                      />
+                                      {editingWallPostDraft.images?.length > 0 && (
+                                        <div className="flex gap-2 flex-wrap">
+                                          {editingWallPostDraft.images.map((src, i) => (
+                                            <div key={i} className="relative flex-shrink-0">
+                                              <img src={src} alt="" className="w-20 h-20 rounded-lg object-cover ring-1 ring-white/10" />
+                                              <button type="button" onClick={() => setEditingWallPostDraft(prev => ({ ...prev, images: prev.images.filter((_, j) => j !== i) }))} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-400 transition-colors"><X size={10} /></button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <div className="flex items-center gap-2">
+                                        <button type="button" onClick={() => wallEditImageInputRef.current?.click()} className="p-2 rounded-lg border border-[#30363d] hover:border-[var(--color-accent)]/50 text-[#8b949e] hover:text-[var(--color-accent)] transition-colors" title="Прикрепить фото"><Image size={18} /></button>
+                                        <button type="button" onClick={handleSaveWallPost} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-accent)] text-black rounded-lg text-xs font-bold hover:opacity-90">
+                                          <Save size={14} /> Сохранить
+                                        </button>
+                                        <button type="button" onClick={handleCancelEditWallPost} className="flex items-center gap-1.5 px-3 py-1.5 text-[#8b949e] hover:text-white rounded-lg text-xs font-bold">
+                                          <X size={14} /> Отмена
+                                        </button>
+                                      </div>
                                     </div>
-                                  ))}
+                                  ) : (
+                                  <>
+                                  {(w.content || '').trim() && <p className="text-sm text-white/90 whitespace-pre-wrap break-words mb-4"><ContentWithEmojis text={w.content} emojis={emojis} /></p>}
+                                  {w.thread_id && (
+                                    <div
+                                      onClick={(e) => { e.stopPropagation(); openThread({ id: w.thread_id }); }}
+                                      className="mt-4 relative group/card overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] hover:border-[var(--color-accent)]/50 hover:shadow-[0_0_25px_-10px_var(--color-accent)] transition-all duration-500 cursor-pointer flex"
+                                    >
+                                      <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-accent)]/5 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500" />
+                                      {w.thread_image && (
+                                        <div className="w-28 sm:w-32 h-full min-h-[96px] relative overflow-hidden flex-shrink-0 rounded-l-xl cursor-zoom-in" onClick={(e) => { e.stopPropagation(); openLightbox([w.thread_image], 0); }}>
+                                          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0a0a0a]/90 z-10 pointer-events-none" />
+                                          <img src={w.thread_image} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover/card:scale-110" />
+                                        </div>
+                                      )}
+                                      <div className="flex-1 p-4 relative z-20 flex flex-col justify-center min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-[10px] font-black tracking-[0.2em] text-[var(--color-accent)] uppercase flex items-center gap-1.5">
+                                            <Repeat2 size={10} />
+                                            Репост темы
+                                          </span>
+                                          <ArrowUpRight size={14} className="text-[#444] group-hover/card:text-white group-hover/card:translate-x-0.5 group-hover/card:-translate-y-0.5 transition-all duration-300" />
+                                        </div>
+                                        <h4 className="text-sm sm:text-base font-bold text-white leading-tight group-hover/card:text-[var(--color-accent)] transition-colors duration-300 line-clamp-2">
+                                          {w.thread_title || 'Тема'}
+                                        </h4>
+                                        <div className="mt-2 text-[10px] text-gray-500 group-hover/card:text-gray-400 flex items-center gap-2">
+                                          <span>Читать полностью</span>
+                                          <div className="h-px w-4 bg-gray-700 group-hover/card:w-8 group-hover/card:bg-[var(--color-accent)] transition-all duration-500" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Wall Post Images */}
+                                  {images.length > 0 && (
+                                    <div className={`mt-3 ${images.length > 1 ? 'grid grid-cols-2 gap-1' : ''}`}>
+                                      {images.map((src, i) => (
+                                        <div
+                                          key={i}
+                                          className="relative overflow-hidden group/image border border-white/10 rounded-xl"
+                                        >
+                                          <img
+                                            src={src}
+                                            onClick={(e) => { e.stopPropagation(); openLightbox(images, i); }}
+                                            alt="attachment"
+                                            className={`w-full object-cover object-center cursor-zoom-in transition-transform duration-500 group-hover/image:scale-105 ${images.length === 1 ? 'h-64' : 'h-48'}`}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                   {hasPoll && (
                                     <div className="mt-4 space-y-2">
                                       <p className="text-sm font-medium text-white mb-3">{w.poll_question}</p>
@@ -3066,15 +4719,23 @@ export default function App() {
                                       <div className="space-y-3 mb-4">
                                         {comments.map((c) => {
                                           const avatarSrc = (c.author_avatar || c.author?.custom_avatar || c.author?.avatar) && !isPlaceholderUrl(c.author_avatar || c.author?.custom_avatar || c.author?.avatar) ? (c.author_avatar || c.author?.custom_avatar || c.author?.avatar) : null;
+                                          const canDeleteWallComment = user && (user.id === c.user_id || user.id === w.user_id || user.is_admin);
                                           return (
-                                          <div key={c.id} className="flex gap-3">
+                                          <div key={c.id} className="flex gap-3 group/comment">
                                             <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
                                               <AvatarWithFallback src={avatarSrc} alt={c.username} fallbackLetter={c.username} className="w-full h-full object-cover" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                              <span className="text-xs font-medium text-white">{c.username}</span>
-                                              <span className="text-[10px] text-white/50 ml-2">{c.time}</span>
-                                              <p className="text-sm text-white/80 break-words whitespace-normal mt-0.5">{c.content}</p>
+                                              <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs font-medium text-white">{c.username}</span>
+                                                  <span className="text-[10px] text-white/50">{c.time}</span>
+                                                </div>
+                                                {canDeleteWallComment && (
+                                                  <button type="button" onClick={() => handleDeleteWallComment(w.id, c.id)} className="opacity-0 group-hover/comment:opacity-100 p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-all" title="Удалить"><Trash2 size={12} /></button>
+                                                )}
+                                              </div>
+                                              <p className="text-sm text-white/80 break-words whitespace-normal mt-0.5"><ContentWithEmojis text={c.content} emojis={emojis} /></p>
                                             </div>
                                           </div>
                                           );
@@ -3087,25 +4748,109 @@ export default function App() {
                                               <AvatarWithFallback src={getWallAvatarUrl(user)} alt="" fallbackLetter={user?.username} className="w-full h-full object-cover" />
                                             </div>
                                             <input value={commentDraft} onChange={(e) => setWallCommentDrafts(prev => ({ ...prev, [w.id]: e.target.value }))} placeholder="Написать комментарий..." className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-sm text-white placeholder:text-white/40" />
-                                            <button type="submit" disabled={!commentDraft.trim()} className="px-3 py-1.5 bg-[var(--color-accent)]/20 text-[var(--color-accent)] rounded-lg text-xs font-medium hover:bg-[var(--color-accent)]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0">Отправить</button>
+                                            <button
+                                            type="submit"
+                                            disabled={!commentDraft.trim()}
+                                            className={`
+                                              relative group flex items-center justify-center
+                                              p-3 sm:p-3.5 rounded-full text-white
+                                              bg-gradient-to-br from-[var(--color-accent)] to-indigo-600
+                                              shadow-lg shadow-[var(--color-accent)]/30
+                                              hover:shadow-[var(--color-accent)]/50 hover:scale-105 hover:brightness-110
+                                              active:scale-95
+                                              disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100 disabled:brightness-100
+                                              transition-all duration-300 ease-out shrink-0
+                                            `}
+                                          >
+                                            <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                            <SendHorizontal size={18} className="relative z-10 -rotate-12 group-hover:rotate-0 transition-transform duration-300" />
+                                          </button>
                                           </div>
                                         </form>
                                       )}
                                     </div>
                                   )}
-                                  <div className="flex items-center gap-6 mt-4 pt-4 border-t border-white/5 text-white/50">
-                                    <button type="button" onClick={() => handleLikeWallPost(w.id)} className="flex items-center gap-1.5 text-xs hover:text-[var(--color-accent)] transition-colors">
-                                      <Heart size={14} className={w.liked ? 'fill-current text-[var(--color-accent)]' : ''} />
-                                      {w.likes ?? 0}
-                                    </button>
-                                    <button type="button" onClick={() => setWallCommentsOpenPostId(prev => prev === w.id ? null : w.id)} className="flex items-center gap-1.5 text-xs hover:text-[var(--color-accent)] transition-colors">
-                                      <MessageCircle size={14} />
-                                      {comments.length}
-                                    </button>
+                                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/5 text-white/50">
+                                    <div className="flex items-center gap-4">
+                                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLikeWallPost(w.id); }} className="flex items-center gap-1.5 text-xs hover:text-[var(--color-accent)] transition-colors">
+                                        <Heart size={14} className={w.liked ? 'fill-current text-[var(--color-accent)]' : ''} />
+                                        {w.likes ?? 0}
+                                      </button>
+                                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setWallCommentsOpenPostId(prev => prev === w.id ? null : w.id); }} className="flex items-center gap-1.5 text-xs hover:text-[var(--color-accent)] transition-colors" title="Комментарии">
+                                        <MessageSquare size={14} />
+                                        {comments.length > 0 ? ` ${comments.length}` : ''}
+                                      </button>
+                                      <div className="relative" data-wall-share>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setWallShareOpenPostId(prev => prev === w.id ? null : w.id);
+                                          }}
+                                          className="flex items-center gap-1.5 text-xs hover:text-[var(--color-accent)] transition-colors"
+                                          title="Поделиться"
+                                        >
+                                          <Share2 size={14} />
+                                        </button>
+                                        {wallShareOpenPostId === w.id && (
+                                          <div className="absolute left-0 bottom-full mb-2 z-[100] min-w-[180px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                                            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); const url = `${window.location.origin}${window.location.pathname || '/'}?profile=${profileUserId}`; navigator.clipboard.writeText(url).then(() => { setToast({ message: 'Ссылка скопирована', type: 'success' }); setWallShareOpenPostId(null); }).catch(() => setToast({ message: 'Не удалось скопировать', type: 'error' })); }} className="w-full text-left px-4 py-3 text-sm text-[#c9d1d9] hover:bg-white/5 flex items-center gap-2 transition-colors">
+                                              <Link size={14} /> Скопировать ссылку
+                                            </button>
+                                            {w.thread_id && (
+                                              <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setWallRepostPostId(w.id); setWallRepostCommentDraft(''); setWallShareOpenPostId(null); }} disabled={!user} className="w-full text-left px-4 py-3 text-sm text-[#c9d1d9] hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 transition-colors">
+                                                <Repeat2 size={14} /> Репостнуть на стену
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {canEditWallPost && (
+                                      <div className="flex items-center gap-2">
+                                        <button type="button" onClick={() => handleStartEditWallPost(w)} className="p-2 rounded-full hover:bg-white/10 transition-colors text-gray-400 hover:text-white" title="Редактировать">
+                                          <Pencil size={14} />
+                                        </button>
+                                        <button type="button" onClick={async () => { if (confirm('Удалить пост?')) { try { await api.deleteWallPost(profileUserId, w.id); setWallPosts(prev => prev.filter(p => p.id !== w.id)); setToast({ message: 'Пост удалён', type: 'success' }); } catch (err) { setToast({ message: err?.message || 'Ошибка', type: 'error' }); } } }} className="p-2 rounded-full hover:bg-white/10 transition-colors text-gray-400 hover:text-red-400" title="Удалить">
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
+                                  </>
+                                  )}
                                 </div>
                               </div>
                             );})}
+                          <input ref={wallEditImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                            const files = [...(e.target.files || [])];
+                            const valid = files.filter(f => f.size <= 5 * 1024 * 1024);
+                            if (files.length !== valid.length) setToast({ message: 'Фото до 5 МБ каждое', type: 'error' });
+                            if (valid.length === 0) return;
+                            Promise.all(valid.map(f => new Promise((res) => {
+                              const r = new FileReader();
+                              r.onload = () => res(r.result);
+                              r.readAsDataURL(f);
+                            }))).then(urls => setEditingWallPostDraft(prev => ({ ...prev, images: [...(prev.images || []), ...urls].slice(0, 10) })));
+                            e.target.value = '';
+                          }} />
+                          {wallRepostPostId && (() => {
+                            const repostPost = wallPosts.find(p => p.id === wallRepostPostId);
+                            if (!repostPost) return null;
+                            return (
+                              <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setWallRepostPostId(null); setWallRepostCommentDraft(''); }}>
+                                <div className="bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-5 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+                                  <p className="text-sm font-medium text-white mb-3">Добавить комментарий?</p>
+                                  <textarea value={wallRepostCommentDraft} onChange={(e) => setWallRepostCommentDraft(e.target.value)} placeholder="Ваш комментарий к репосту (необязательно)..." className="w-full min-h-[80px] py-2 px-3 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[var(--color-accent)] resize-none mb-4" />
+                                  <div className="flex justify-end gap-2">
+                                    <button type="button" onClick={() => { setWallRepostPostId(null); setWallRepostCommentDraft(''); }} className="px-4 py-2 text-[#8b949e] hover:text-white rounded-lg text-sm font-medium">Отмена</button>
+                                    <button type="button" onClick={() => handleRepostWallPost(repostPost, wallRepostCommentDraft)} className="px-4 py-2 bg-[var(--color-accent)] text-black rounded-lg text-sm font-bold hover:opacity-90">Опубликовать</button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                           </div>
                         )}
                       </div>
@@ -3202,7 +4947,7 @@ export default function App() {
           )}
         </section>
 
-        <aside className={`hidden space-y-6 ${view === 'profile' || view === 'admin' || view === 'messages' ? 'lg:hidden' : 'lg:block'}`}>
+        <aside className={`hidden space-y-6 ${view === 'profile' || view === 'admin' || view === 'messages' || view === 'settings' ? 'lg:hidden' : 'lg:block'}`}>
           <div className="bg-[var(--bg-widget-glass)] backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
             <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
               <h4 className="text-[11px] font-bold tracking-[0.2em] opacity-60 uppercase">СТАТИСТИКА</h4>
@@ -3218,6 +4963,42 @@ export default function App() {
               </div>
             </div>
           </div>
+          {view === 'thread' && selectedThread && similarThreads.length > 0 && (
+          <div className="bg-[var(--bg-widget-glass)] backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
+            <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+              <h4 className="text-[11px] font-bold tracking-[0.2em] opacity-60 uppercase">ПОХОЖИЕ ТЕМЫ</h4>
+            </div>
+            <div className="p-3">
+              <div className="space-y-4 mt-4">
+                {similarThreads.map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => openThread(t)}
+                    className="flex items-center gap-3 p-2 -mx-2 rounded-xl hover:bg-white/[0.04] transition-all group cursor-pointer"
+                  >
+                    <div className="w-20 h-14 shrink-0 rounded-lg overflow-hidden border border-white/10 bg-black/40">
+                      <img
+                        src={t.cover_image || t.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="56" viewBox="0 0 80 56"%3E%3Crect fill="%23333" width="80" height="56"/%3E%3C/svg%3E'}
+                        alt=""
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <h4 className="font-bold text-white text-lg leading-tight break-words line-clamp-2 overflow-hidden min-w-0 group-hover:text-[var(--color-accent)] transition-colors">
+                        {t.title}
+                      </h4>
+                      <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-500">
+                        <span className="flex items-center gap-1"><Heart size={10} /> {t.likes_count ?? t.likes ?? 0}</span>
+                        <span>•</span>
+                        <span>{t.category}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          )}
           <div className="bg-[var(--bg-widget-glass)] backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
             <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
               <h4 className="text-[11px] font-bold tracking-[0.2em] opacity-60 uppercase">ПОСЛЕДНИЕ ОТВЕТЫ</h4>
@@ -3249,6 +5030,7 @@ export default function App() {
       </main>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {lightbox.open && <ImageViewer images={lightbox.images} initialIndex={lightbox.index} onClose={() => setLightbox({ open: false, images: [], index: 0 })} />}
 
       {showProfileEdit && user && (
         <ProfileEditModal

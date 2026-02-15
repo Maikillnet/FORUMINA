@@ -11,6 +11,6 @@ export function create(req, res) {
   const { content } = req.body;
   if (!content?.trim()) return res.status(400).json({ error: 'Введите сообщение' });
   const user = db.users.getById(req.user.id);
-  const msg = db.messages.create(req.user.id, user?.username || 'user', content.trim());
+  const msg = db.messages.create(req.user.id, user?.nickname || user?.username || 'user', content.trim());
   res.status(201).json({ ...msg, time: formatTime(msg.created_at) });
 }

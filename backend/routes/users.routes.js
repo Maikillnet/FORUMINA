@@ -8,6 +8,8 @@ router.use(authMiddleware);
 
 router.patch('/me', users.updateProfile);
 router.put('/profile', users.updateProfile);
+router.post('/me/settings', users.updateSettings);
+router.post('/me/password', users.changePassword);
 router.get('/me/feed', users.getActivityFeed);
 router.post('/:id/rank', users.setRank);
 router.get('/:id/posts', users.getPosts);
