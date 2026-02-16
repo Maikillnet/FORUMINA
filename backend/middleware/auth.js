@@ -1,10 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 import db from '../db.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const HEARTBEAT_THROTTLE_MS = 60 * 1000; // Update last_online at most once per minute
 
-export function authMiddleware(req, res, next) {
+async function authMiddlewareImpl(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return next();
   try {
@@ -16,7 +17,7 @@ export function authMiddleware(req, res, next) {
       req.user.is_admin = user.is_admin === true;
       const lastOnline = user.last_online ? new Date(user.last_online).getTime() : 0;
       if (Number.isNaN(lastOnline) || Date.now() - lastOnline > HEARTBEAT_THROTTLE_MS) {
-        db.users.update(userId, { last_online: new Date().toISOString() });
+        await db.users.update(userId, { last_online: new Date().toISOString() });
       }
     }
     next();
@@ -24,3 +25,5 @@ export function authMiddleware(req, res, next) {
     next();
   }
 }
+
+export const authMiddleware = asyncHandler(authMiddlewareImpl);

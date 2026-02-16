@@ -9,7 +9,7 @@ function requireAuth(req, res) {
   return true;
 }
 
-export function send(req, res) {
+export async function send(req, res) {
   if (!requireAuth(req, res)) return;
   const { senderId, receiverId, content, attachments } = req.body;
   if (!senderId || !receiverId) {
@@ -24,7 +24,7 @@ export function send(req, res) {
     return res.status(403).json({ error: 'Можно отправлять только от своего имени' });
   }
   const msg = db.private_messages.create(parseInt(senderId, 10), parseInt(receiverId, 10), (content || '').trim(), attachments || []);
-  db.users.update(parseInt(senderId, 10), { last_online: msg.timestamp });
+  await db.users.update(parseInt(senderId, 10), { last_online: msg.timestamp });
   res.status(201).json({ ...msg, time: formatTime(msg.timestamp) });
 }
 

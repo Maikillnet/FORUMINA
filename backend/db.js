@@ -206,7 +206,7 @@ export default {
       await save();
       return user;
     },
-    update(userId, data) {
+    async update(userId, data) {
       const u = d().users.find((x) => x.id === userId);
       if (!u) return null;
       if (data.username != null) {
@@ -238,7 +238,7 @@ export default {
         }
       }
       if (data.password != null) u.password = data.password;
-      save();
+      await save();
       return u;
     },
     setRank(adminId, userId, rank) {

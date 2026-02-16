@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/messages.controller.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 router.use(authMiddleware);
 
-router.post('/', ctrl.send);
+router.post('/', asyncHandler(ctrl.send));
 router.post('/:id/pin', ctrl.togglePinMessage);
 router.post('/:id/unpin', ctrl.unpinMessage);
 router.delete('/:id', ctrl.deleteMessage);

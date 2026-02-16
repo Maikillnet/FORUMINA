@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { config } from '../config/index.js';
+import { sanitizeUser } from '../utils/sanitizeUser.js';
 
 export async function register(req, res) {
   const { username, email, password } = req.body;
@@ -24,7 +25,7 @@ export async function register(req, res) {
   try {
     const hash = bcrypt.hashSync(p, 10);
     const user = await db.users.create(u, e, hash);
-    const { password: _, ...safe } = user;
+    const safe = sanitizeUser(user);
     const token = jwt.sign({ id: user.id }, config.jwtSecret);
     res.json({ user: safe, token });
   } catch (err) {
@@ -32,7 +33,7 @@ export async function register(req, res) {
   }
 }
 
-export function login(req, res) {
+export async function login(req, res) {
   const { login, password } = req.body;
   const log = (login || '').trim();
   const pwd = password || '';
@@ -41,8 +42,9 @@ export function login(req, res) {
   if (!user || !bcrypt.compareSync(pwd, user.password)) {
     return res.status(401).json({ error: 'Неверный логин или пароль' });
   }
-  db.users.update(user.id, { last_online: new Date().toISOString() });
-  const { password: _, ...safe } = db.users.getById(user.id);
+  await db.users.update(user.id, { last_online: new Date().toISOString() });
+  const freshUser = db.users.getById(user.id);
+  const safe = sanitizeUser(freshUser);
   if (safe.is_admin === undefined && (safe.id === 1 || safe.username === 'admin_dev')) {
     safe.is_admin = true;
   }
@@ -54,13 +56,9 @@ export function me(req, res) {
   if (!req.user) return res.status(401).json({ error: 'Не авторизован' });
   const user = db.users.getById(req.user.id);
   if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
-  const { password: _, ...safe } = user;
+  const safe = sanitizeUser(user);
   if (safe.is_admin === undefined && (safe.id === 1 || safe.username === 'admin_dev')) {
     safe.is_admin = true;
-  }
-  if (safe.settings?.openai_key) {
-    safe.has_openai_key = true;
-    delete safe.settings.openai_key;
   }
   res.json(safe);
 }

@@ -1,8 +1,9 @@
 import bcrypt from 'bcryptjs';
 import db, { RANKS } from '../db.js';
 import { formatTime } from '../utils/formatTime.js';
+import { sanitizeUser } from '../utils/sanitizeUser.js';
 
-export function updateProfile(req, res) {
+export async function updateProfile(req, res) {
   if (!req.user) return res.status(401).json({ error: 'Войдите для изменения профиля' });
   const user = db.users.getById(req.user.id);
   if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
@@ -24,24 +25,19 @@ export function updateProfile(req, res) {
   if (occupation != null) data.occupation = occupation;
   if (interests != null) data.interests = interests;
   if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Нет данных для обновления' });
-  const updated = db.users.update(req.user.id, data);
+  const updated = await db.users.update(req.user.id, data);
   if (!updated) {
     if (username && db.users.getByUsername(username.trim())) return res.status(400).json({ error: 'Логин уже занят. Используйте только латиницу, цифры и _' });
     return res.status(400).json({ error: 'Не удалось обновить профиль' });
   }
-  const { password: _, ...safe } = updated;
-  if (safe.settings?.openai_key) {
-    safe.has_openai_key = true;
-    delete safe.settings.openai_key;
-  }
-  res.json(safe);
+  res.json(sanitizeUser(updated));
 }
 
 export function getById(req, res) {
   const id = req.params.id === 'me' && req.user ? req.user.id : parseInt(req.params.id);
   const profileUser = db.users.getById(id);
   if (!profileUser) return res.status(404).json({ error: 'Пользователь не найден' });
-  const { password: _, email: __, ...safe } = profileUser;
+  const safe = sanitizeUser(profileUser);
   const postsCount = db.posts.getByAuthorId(profileUser.id, 1000).length;
   const commentsCount = db.comments.getCountByAuthor ? db.comments.getCountByAuthor(profileUser.id) : 0;
   const subscriptions = db.subscriptions.list(profileUser.id);
@@ -88,20 +84,21 @@ export function setRank(req, res) {
   const { rank } = req.body;
   if (!RANKS.find((r) => r.id === rank)) return res.status(400).json({ error: 'Недопустимое звание' });
   const updated = db.users.setRank(req.user.id, parseInt(req.params.id), rank);
-  const { password: _, ...safe } = updated;
-  res.json(safe);
+  res.json(sanitizeUser(updated));
 }
 
-export function updateSettings(req, res) {
+export async function updateSettings(req, res) {
   if (!req.user) return res.status(401).json({ error: 'Войдите для изменения настроек' });
   const { username, nickname, currentPassword, newPassword, confirmPassword, settings } = req.body;
   const data = {};
   const user = db.users.getById(req.user.id);
   if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
 
-  const hasChanges = username != null || nickname != null || newPassword || confirmPassword || (settings && (settings.openai_key !== undefined || settings.privacy !== undefined));
-  if (hasChanges && !currentPassword) return res.status(400).json({ error: 'Укажите текущий пароль для подтверждения' });
-  if (hasChanges && currentPassword && !bcrypt.compareSync(currentPassword, user.password)) {
+  const usernameChanged = username != null && String(username).trim().toLowerCase() !== (user.username || '').toLowerCase();
+  const nicknameChanged = nickname !== undefined && String(nickname).trim() !== (user.nickname || '');
+  const needsPassword = usernameChanged || nicknameChanged || newPassword || confirmPassword;
+  if (needsPassword && !currentPassword) return res.status(400).json({ error: 'Укажите текущий пароль для подтверждения' });
+  if (needsPassword && currentPassword && !bcrypt.compareSync(currentPassword, user.password)) {
     return res.status(400).json({ error: 'Старый пароль неверный' });
   }
 
@@ -113,7 +110,7 @@ export function updateSettings(req, res) {
     if (existing && existing.id !== req.user.id) return res.status(409).json({ error: 'Этот логин уже занят' });
     data.username = trimmed;
   }
-  if (nickname != null) data.nickname = String(nickname).trim() || user.username;
+  if (nickname !== undefined) data.nickname = String(nickname).trim();
 
   if (newPassword || confirmPassword) {
     if (!currentPassword) return res.status(400).json({ error: 'Укажите текущий пароль' });
@@ -131,10 +128,11 @@ export function updateSettings(req, res) {
     if (settings.openai_key !== undefined) {
       const rawKey = typeof settings.openai_key === 'string' ? settings.openai_key.trim() : '';
       const keyVal = rawKey || null;
-      const reqUsername = (req.body.username ?? user?.username ?? '').toString().trim();
+      const reqUsername = (req.body.username ?? user?.username ?? '').toString().trim().toLowerCase();
       const isLikelyUsername = keyVal && (keyVal === reqUsername || keyVal === (user?.nickname || '').toString().trim());
-      const looksLikeApiKey = keyVal && (keyVal.startsWith('sk-') || keyVal.startsWith('sk_proj-'));
-      if (keyVal && isLikelyUsername && !looksLikeApiKey) {
+      const looksLikeApiKey = keyVal && /^sk(-|_)[a-zA-Z0-9_-]+/.test(keyVal);
+      const isShortAndMatchesUsername = keyVal && keyVal.length < 20 && keyVal === reqUsername;
+      if (keyVal && (isLikelyUsername && !looksLikeApiKey || isShortAndMatchesUsername)) {
         return res.status(400).json({ error: 'Ключ AI не может совпадать с логином. Введите корректный OpenAI API ключ (начинается с sk-).' });
       }
       data.settings.openai_key = keyVal;
@@ -145,18 +143,13 @@ export function updateSettings(req, res) {
   }
 
   if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Нет данных для обновления' });
-  const updated = db.users.update(req.user.id, data);
+  const updated = await db.users.update(req.user.id, data);
   if (!updated) return res.status(400).json({ error: 'Не удалось обновить настройки' });
 
-  const { password: _, ...safe } = updated;
-  if (safe.settings?.openai_key) {
-    safe.has_openai_key = true;
-    delete safe.settings.openai_key;
-  }
-  res.json(safe);
+  res.json(sanitizeUser(updated));
 }
 
-export function changePassword(req, res) {
+export async function changePassword(req, res) {
   if (!req.user) return res.status(401).json({ error: 'Войдите для смены пароля' });
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) {
@@ -170,13 +163,9 @@ export function changePassword(req, res) {
     return res.status(400).json({ error: 'Неверный текущий пароль' });
   }
   const hash = bcrypt.hashSync(newPassword, 10);
-  db.users.update(req.user.id, { password: hash });
-  const { password: _, ...safe } = db.users.getById(req.user.id);
-  if (safe.settings?.openai_key) {
-    safe.has_openai_key = true;
-    delete safe.settings.openai_key;
-  }
-  res.json({ message: 'Пароль изменён', user: safe });
+  await db.users.update(req.user.id, { password: hash });
+  const freshUser = db.users.getById(req.user.id);
+  res.json({ message: 'Пароль изменён', user: sanitizeUser(freshUser) });
 }
 
 export function getPosts(req, res) {

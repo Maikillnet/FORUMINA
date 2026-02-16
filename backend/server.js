@@ -12,6 +12,15 @@ app.use(express.json({ limit: '40mb' }));
 app.use(authMiddleware);
 app.use(routes);
 
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: err?.message || 'Ошибка сервера' });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 async function start() {
   await initDb();
   app.listen(config.port, () => {

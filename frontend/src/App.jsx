@@ -803,11 +803,12 @@ function AIAssistantPanel({ user, activeChatUser, aiAnalysis, aiDraft, aiLoading
 
 const inputFocusClass = 'focus:outline-none focus:border-[var(--color-accent)]/50 focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:shadow-[0_0_20px_rgba(16,185,129,0.15)] transition-all';
 
-function SettingsPage({ user, setUser, setToast, onBack }) {
+function SettingsPage({ user, setUser, setToast, onBack, onSaveSuccess, onMountRefresh }) {
   const [openaiKeyInput, setOpenaiKeyInput] = useState('');
+  const userClearedKeyToEdit = useRef(false);
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [login, setLogin] = useState(user?.username || '');
-  const [nickname, setNickname] = useState(user?.nickname || user?.username || '');
+  const [nickname, setNickname] = useState(user?.nickname || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -821,23 +822,43 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
 
   useEffect(() => {
     setLogin(user?.username || '');
-    setNickname(user?.nickname || user?.username || '');
+    setNickname(user?.nickname != null ? user.nickname : '');
     setProfileVisibility(user?.settings?.privacy?.profile_visibility || 'everyone');
     setShowOnlineStatus(user?.settings?.privacy?.show_online_status !== false);
     setMessageAccess(user?.settings?.privacy?.message_access || 'all');
   }, [user?.id, user?.username, user?.nickname, user?.settings?.privacy]);
 
+  useEffect(() => {
+    onMountRefresh?.();
+  }, [onMountRefresh]);
+
+  useEffect(() => {
+    userClearedKeyToEdit.current = false;
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.has_openai_key && !userClearedKeyToEdit.current) {
+      setOpenaiKeyInput('•••• (ключ сохранён)');
+    } else if (!user?.has_openai_key && openaiKeyInput === '•••• (ключ сохранён)') {
+      setOpenaiKeyInput('');
+    }
+  }, [user?.has_openai_key]);
+
+  const changingLogin = login.trim().toLowerCase() !== (user?.username || '').toLowerCase();
+  const changingNickname = nickname.trim() !== (user?.nickname || '');
+  const changingPassword = newPassword || confirmPassword;
+  const needsPassword = changingPassword || changingLogin || changingNickname;
+
   const handleSave = async (e) => {
     e?.preventDefault();
     if (!user?.id) return;
-    const changingPassword = newPassword || confirmPassword;
     const hasOpenAIKeyToSave = openaiKeyInput?.trim();
-    if (!currentPassword?.trim()) {
+    if (needsPassword && !currentPassword?.trim()) {
       setCurrentPasswordError(true);
       setPasswordShake(true);
       setTimeout(() => setPasswordShake(false), 500);
       setToast({
-        message: hasOpenAIKeyToSave ? 'Для сохранения ключа AI необходимо подтвердить личность паролем' : 'Для сохранения изменений введите текущий пароль',
+        message: 'Для смены логина, никнейма или пароля введите текущий пароль',
         type: 'error',
       });
       return;
@@ -865,31 +886,34 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
     setSaving(true);
     try {
       const openaiKeyValue = openaiKeyInput.trim() || undefined;
+      const isNewKeyTyped = openaiKeyValue && openaiKeyValue.length > 0 && !openaiKeyValue.startsWith('•');
       if (openaiKeyValue && openaiKeyValue === loginTrimmed && !openaiKeyValue.startsWith('sk-')) {
         setToast({ message: 'Ключ AI не может совпадать с логином. Введите корректный OpenAI API ключ (начинается с sk-).', type: 'error' });
         setSaving(false);
         return;
       }
+      const settingsPayload = {
+        privacy: {
+          profile_visibility: profileVisibility,
+          show_online_status: showOnlineStatus,
+          message_access: messageAccess,
+        },
+      };
+      if (isNewKeyTyped) settingsPayload.openai_key = openaiKeyValue;
       const payload = {
         username: loginTrimmed || undefined,
         nickname: nickname.trim() || undefined,
-        settings: {
-          openai_key: openaiKeyValue,
-          privacy: {
-            profile_visibility: profileVisibility,
-            show_online_status: showOnlineStatus,
-            message_access: messageAccess,
-          },
-        },
+        settings: settingsPayload,
       };
-      payload.currentPassword = currentPassword;
+      if (needsPassword) payload.currentPassword = currentPassword;
       if (changingPassword) {
         payload.newPassword = newPassword;
         payload.confirmPassword = confirmPassword;
       }
       const updated = await api.saveSettings(payload);
-      setUser((prev) => prev ? { ...prev, ...updated, has_openai_key: updated?.has_openai_key ?? !!openaiKeyValue } : prev);
-      setOpenaiKeyInput('');
+      const keySaved = Boolean(updated?.has_openai_key ?? !!openaiKeyValue);
+      setUser((prev) => prev ? { ...prev, ...updated, has_openai_key: keySaved } : prev);
+      userClearedKeyToEdit.current = false;
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -897,6 +921,8 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2000);
       setToast({ message: 'Настройки успешно сохранены', type: 'success' });
+      onSaveSuccess?.();
+      setOpenaiKeyInput('');
     } catch (err) {
       const msg = err?.message || 'Ошибка сохранения';
       setToast({ message: msg, type: 'error' });
@@ -940,22 +966,45 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
               <p className="text-xs text-gray-400 leading-relaxed">
                 Этот ключ используется для работы вашего персонального AI-ассистента в чатах.
               </p>
-              <div className="relative">
-                <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input
-                  type={showOpenaiKey ? 'text' : 'password'}
-                  value={openaiKeyInput}
-                  onChange={(e) => setOpenaiKeyInput(e.target.value)}
-                  placeholder={user?.has_openai_key ? '•••••••••••• (ключ сохранён)' : 'OpenAI API Key'}
-                  className={`w-full pl-9 pr-10 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type={showOpenaiKey ? 'text' : 'password'}
+                    value={openaiKeyInput}
+                    onChange={(e) => setOpenaiKeyInput(e.target.value)}
+                    onFocus={() => {
+                      if (openaiKeyInput === '•••• (ключ сохранён)') {
+                        userClearedKeyToEdit.current = true;
+                        setOpenaiKeyInput('');
+                      }
+                    }}
+                    onBlur={() => {
+                      if (openaiKeyInput === '' && user?.has_openai_key) {
+                        userClearedKeyToEdit.current = false;
+                        setOpenaiKeyInput('•••• (ключ сохранён)');
+                      }
+                    }}
+                    placeholder={user?.has_openai_key ? '•••• (ключ сохранён)' : 'OpenAI API Key'}
+                    autoComplete="new-password"
+                    className={`w-full pl-9 pr-10 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOpenaiKey((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-white transition-colors rounded"
+                    title={showOpenaiKey ? 'Скрыть' : 'Показать'}
+                  >
+                    {showOpenaiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowOpenaiKey((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-white transition-colors rounded"
-                  title={showOpenaiKey ? 'Скрыть' : 'Показать'}
+                  onClick={handleSave}
+                  disabled={saving || !openaiKeyInput?.trim() || openaiKeyInput === '•••• (ключ сохранён)'}
+                  className="px-4 py-3 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
-                  {showOpenaiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {saving ? '...' : 'Сохранить ключ'}
                 </button>
               </div>
             </div>
@@ -975,6 +1024,7 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
                   value={login}
                   onChange={(e) => setLogin(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())}
                   placeholder="Только a-z, 0-9, _"
+                  autoComplete="off"
                   className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
                 />
               </div>
@@ -993,7 +1043,8 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
                 <div className="space-y-3">
                   <div>
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                      Текущий пароль <span className="text-red-400">*</span>
+                      Текущий пароль {needsPassword && <span className="text-red-400">*</span>}
+                      {!needsPassword && <span className="text-gray-500 font-normal normal-case"> (только при смене логина, никнейма или пароля)</span>}
                     </label>
                     <input
                       type="password"
@@ -1003,6 +1054,7 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
                         if (currentPasswordError) setCurrentPasswordError(false);
                       }}
                       placeholder="Текущий пароль"
+                      autoComplete="new-password"
                       className={`w-full px-4 py-3 text-sm bg-black/30 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass} ${currentPasswordError ? 'border-2 border-red-500/60 ring-2 ring-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)]' : 'border border-white/10'} ${passwordShake ? 'animate-shake' : ''}`}
                     />
                     {currentPasswordError && (
@@ -1014,6 +1066,7 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Новый пароль"
+                    autoComplete="new-password"
                     className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
                   />
                   <input
@@ -1021,6 +1074,7 @@ function SettingsPage({ user, setUser, setToast, onBack }) {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Повторите новый пароль"
+                    autoComplete="new-password"
                     className={`w-full px-4 py-3 text-sm bg-black/30 border rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass} ${newPassword && confirmPassword && newPassword !== confirmPassword ? 'border-red-500/60 ring-2 ring-red-500/20' : 'border-white/10'}`}
                   />
                 </div>
@@ -2760,7 +2814,7 @@ export default function App() {
   const loadUser = useCallback(async () => {
     try {
       const u = await api.getMe();
-      setUser(u ? { ...u, id: u.id } : null);
+      setUser(u ? { ...u, id: u.id, has_openai_key: !!u.has_openai_key } : null);
     } catch {
       setUser(null);
       localStorage.removeItem('forum_token');
@@ -3599,6 +3653,8 @@ export default function App() {
               setUser={setUser}
               setToast={setToast}
               onBack={() => setView('profile')}
+              onSaveSuccess={() => loadUser()}
+              onMountRefresh={loadUser}
             />
           )}
 
