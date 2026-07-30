@@ -13,22 +13,64 @@ function headers() {
 
 const SERVER_ERROR = 'Сервер недоступен. Запустите backend (дважды кликни backend\\start-backend.bat).';
 
+let unauthorizedHandler = null;
+// Registers a callback fired once when the server tells us (via the
+// X-Token-Invalid header — set on ANY response, not just 401s, since most
+// routes stay reachable anonymously) that our stored token is dead. Lets the
+// app force a clean logout instead of silently resending a dead token or
+// leaving stale scattered error toasts around the UI.
+export function onUnauthorized(handler) {
+  unauthorizedHandler = handler;
+}
+
+let invalidTokenConfirmation = null;
+// A single flagged response can be a transport-level fluke under bursty
+// concurrent load (observed with the Vite dev proxy mixing up headers
+// between simultaneous requests) rather than a genuinely dead token.
+// Before actually logging the user out, re-check with one isolated request
+// — a burst of many requests can misreport, but a lone confirmation call
+// reliably reflects the real state.
+async function confirmTokenInvalid() {
+  if (invalidTokenConfirmation) return invalidTokenConfirmation;
+  const token = getToken();
+  if (!token) return;
+  invalidTokenConfirmation = (async () => {
+    try {
+      const res = await fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401 || res.headers.get('X-Token-Invalid')) {
+        localStorage.removeItem('forum_token');
+        unauthorizedHandler?.();
+      }
+    } catch {
+      // Network hiccup during confirmation — not grounds to log out.
+    } finally {
+      invalidTokenConfirmation = null;
+    }
+  })();
+  return invalidTokenConfirmation;
+}
+
 async function safeJson(res) {
   const text = await res.text();
   if (!text) return null;
   try {
     return JSON.parse(text);
-  } catch {
-    throw new Error(SERVER_ERROR);
+  } catch (e) {
+    throw new Error(SERVER_ERROR, { cause: e });
   }
 }
 
 async function safeFetch(url, opts = {}) {
+  let res;
   try {
-    return await fetch(url, opts);
+    res = await fetch(url, opts);
   } catch (e) {
-    throw new Error(SERVER_ERROR);
+    throw new Error(SERVER_ERROR, { cause: e });
   }
+  if (res.headers.get('X-Token-Invalid') && getToken()) {
+    confirmTokenInvalid();
+  }
+  return res;
 }
 
 export async function login(login, password) {
@@ -117,10 +159,8 @@ export async function getPosts(category = 'all', filter = 'new') {
 }
 
 export async function getPost(id, skipView = false) {
-  const h = headers();
-  if (skipView) h['X-Skip-View'] = '1';
   const url = skipView ? `${API}/posts/${id}?skip_view=1` : `${API}/posts/${id}`;
-  const res = await safeFetch(url, { headers: h });
+  const res = await safeFetch(url, { headers: headers() });
   if (!res.ok) throw new Error('Тема не найдена');
   return safeJson(res);
 }

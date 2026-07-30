@@ -12,8 +12,8 @@ export async function register(req, res) {
   if (!u || !e || !p) {
     return res.status(400).json({ error: 'Заполните все поля' });
   }
-  if (p.length < 4) {
-    return res.status(400).json({ error: 'Пароль минимум 4 символа' });
+  if (p.length < 8) {
+    return res.status(400).json({ error: 'Пароль минимум 8 символов' });
   }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(e)) {
@@ -26,7 +26,7 @@ export async function register(req, res) {
     const hash = bcrypt.hashSync(p, 10);
     const user = await db.users.create(u, e, hash);
     const safe = sanitizeUser(user);
-    const token = jwt.sign({ id: user.id }, config.jwtSecret);
+    const token = jwt.sign({ id: user.id }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
     res.json({ user: safe, token });
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Ошибка регистрации' });
@@ -48,7 +48,7 @@ export async function login(req, res) {
   if (safe.is_admin === undefined && (safe.id === 1 || safe.username === 'admin_dev')) {
     safe.is_admin = true;
   }
-  const token = jwt.sign({ id: user.id }, config.jwtSecret);
+  const token = jwt.sign({ id: user.id }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
   res.json({ user: safe, token });
 }
 

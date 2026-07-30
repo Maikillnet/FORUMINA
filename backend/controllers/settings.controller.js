@@ -1,43 +1,34 @@
 import db from '../db.js';
 
-function requireAdmin(req, res) {
-  if (!req.user) return res.status(401).json({ error: 'Не авторизован' });
-  const admin = db.users.getById(req.user.id);
-  if (!admin?.is_admin) return res.status(403).json({ error: 'Только администратор может управлять настройками' });
-  return null;
-}
-
 export function getAll(req, res) {
-  const err = requireAdmin(req, res);
-  if (err) return;
   const settings = db.system_settings.getAll();
   res.json(settings);
 }
 
 const DEFAULT_THEME = { bg_main: '#0d1117', bg_block: '#161b22', text_primary: '#ffffff', color_accent: '#10b981', bg_widget: '#13131f', widget_opacity: 0.7, block_opacity: 0.8, bg_profile: '#1a0b2e', profile_opacity: 0.8 };
 
-/** Public endpoint for site branding (header, tab title, theme) */
+/** Public endpoint for site branding (header, tab title, theme, rules) */
 export function getSiteSettings(req, res) {
   const site_name = db.system_settings.get('site_name') || 'FORUM.LIVE';
   const site_logo = db.system_settings.get('site_logo') || '';
   const site_pattern = db.system_settings.get('site_pattern') || '';
+  const rules_content = db.system_settings.get('rules_content') || '';
   let theme = DEFAULT_THEME;
   try {
     const raw = db.system_settings.get('theme');
     if (raw) theme = { ...DEFAULT_THEME, ...JSON.parse(raw) };
   } catch { }
-  res.json({ site_name, site_logo, site_pattern, theme });
+  res.json({ site_name, site_logo, site_pattern, rules_content, theme });
 }
 
 export function update(req, res) {
-  const err = requireAdmin(req, res);
-  if (err) return;
-  const { key, value, site_name, site_logo, site_pattern, bonus_users, bonus_messages, reputation_per_thread, theme } = req.body;
+  const { key, value, site_name, site_logo, site_pattern, rules_content, bonus_users, bonus_messages, reputation_per_thread, theme } = req.body;
 
-  if (site_name !== undefined || site_logo !== undefined || site_pattern !== undefined || bonus_users !== undefined || bonus_messages !== undefined || reputation_per_thread !== undefined || theme !== undefined) {
+  if (site_name !== undefined || site_logo !== undefined || site_pattern !== undefined || rules_content !== undefined || bonus_users !== undefined || bonus_messages !== undefined || reputation_per_thread !== undefined || theme !== undefined) {
     if (typeof site_name === 'string') db.system_settings.set('site_name', site_name.trim() || 'FORUM.LIVE');
     if (typeof site_logo === 'string') db.system_settings.set('site_logo', site_logo);
     if (site_pattern !== undefined) db.system_settings.set('site_pattern', typeof site_pattern === 'string' ? site_pattern : '');
+    if (typeof rules_content === 'string') db.system_settings.set('rules_content', rules_content.slice(0, 20000));
     if (bonus_users !== undefined) {
       const n = parseInt(bonus_users, 10);
       db.system_settings.set('bonus_users', isNaN(n) || n < 0 ? 0 : n);
@@ -84,8 +75,6 @@ export function update(req, res) {
 }
 
 export function recalculateReputation(req, res) {
-  const err = requireAdmin(req, res);
-  if (err) return;
   try {
     const usersUpdated = db.users.recalculateReputation();
     res.json({ success: true, usersUpdated });

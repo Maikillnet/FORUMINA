@@ -6,11 +6,48 @@ import { dirname, join } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultData = { users: [], categories: [], posts: [], comments: [], post_votes: [], messages: [], private_messages: [], wall_posts: [], wall_poll_votes: [], wall_post_likes: [], wall_post_comments: [], subscriptions: [], comment_likes: [], post_likes: [], trophies: [], user_trophies: [], activity_log: [], system_settings: [], emojis: [] };
 
+// Seeded once into system_settings on first boot; editable afterwards by an
+// admin from the admin panel (Настройки → Правила сообщества), so this is
+// just a sensible starting point, not hardcoded forever.
+const DEFAULT_RULES_CONTENT = `**1. Общие положения**
+1.1. Будьте вежливы к коллегам по цеху — критика кода и подходов приветствуется, переход на личности и оскорбления недопустимы.
+1.2. Запрещён спам, флуд и любая несогласованная реклама услуг, каналов или продуктов.
+1.3. Не создавайте несколько аккаунтов для обхода ограничений или искусственного накручивания голосов.
+
+**2. Контент и код**
+2.1. Весь публикуемый код должен быть безопасен для тех, кто его запустит — без встроенных бэкдоров, майнеров или обфусцированных полезных нагрузок.
+2.2. При использовании чужого кода указывайте автора и лицензию.
+2.3. Оформляйте код блоками (тройные обратные кавычки), а не сплошным текстом — так его удобно читать и копировать.
+2.4. Публикуя уязвимость или эксплойт, помечайте тему как относящуюся к разделу Security и не выкладывайте рабочие эксплойты против реальных, ещё не пропатченных систем.
+
+**3. Разделы форума**
+3.1. Публикуйте темы в подходящем разделе (Backend, Frontend, DevOps, Languages, Security, Карьера) — так их проще найти.
+3.2. Раздел «Статьи» — для гайдов и разборов, а не для коротких вопросов; для быстрых вопросов используйте обычные темы.
+
+**4. Модерация**
+4.1. Администрация может редактировать или скрывать сообщения, нарушающие правила, без предварительного уведомления.
+4.2. Несогласие с решением модератора обсуждается в личных сообщениях, а не эскалацией в публичной теме.
+
+**5. Санкции**
+5.1. Первое нарушение — предупреждение.
+5.2. Повторные или грубые нарушения (в том числе разглашение чужих данных, целенаправленная травля) могут привести к временной или постоянной блокировке аккаунта.`;
+
 let _db;
+
+// Test-only hook: lets each test file point at its own throw-away JSON file
+// instead of the real backend/forum.json, and start every test from a clean
+// slate. No-op outside NODE_ENV=test so it can't affect real deployments.
+export function __resetForTests() {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('__resetForTests() is only available when NODE_ENV=test');
+  }
+  _db = undefined;
+}
 
 export async function initDb() {
   if (_db) return _db;
-  _db = await JSONFilePreset(join(__dirname, 'forum.json'), defaultData);
+  const dbPath = process.env.DB_PATH || join(__dirname, 'forum.json');
+  _db = await JSONFilePreset(dbPath, defaultData);
   await _db.read();
   if (!_db.data.wall_posts) _db.data.wall_posts = [];
   if (!_db.data.wall_poll_votes) _db.data.wall_poll_votes = [];
@@ -72,6 +109,10 @@ export async function initDb() {
     settings.push({ key: 'theme', value: defaultTheme, description: 'Цветовая тема сайта' });
     await _db.write();
   }
+  if (!settings.find((s) => s.key === 'rules_content')) {
+    settings.push({ key: 'rules_content', value: DEFAULT_RULES_CONTENT, description: 'Текст страницы «Правила сообщества» (Markdown)' });
+    await _db.write();
+  }
 
   const adminUser = _db.data.users.find(u => u.id === 1 || u.username === 'admin_dev');
   if (adminUser && adminUser.is_admin === undefined) {
@@ -95,6 +136,11 @@ export async function initDb() {
     _db.data.categories.push({ id: 'messages', name: 'Сообщения', description: 'Личные сообщения', icon: 'MessageSquare', color: '#3b82f6' });
     await _db.write();
   }
+  const hasArticles = _db.data.categories.some((c) => c.id === 'Articles');
+  if (!hasArticles) {
+    _db.data.categories.push({ id: 'Articles', name: 'Статьи', description: 'Статьи и гайды', icon: 'FileText', color: '#a855f7' });
+    await _db.write();
+  }
 
   if (_db.data.users.length === 0) {
     const hash = bcrypt.hashSync('admin123', 10);
@@ -109,6 +155,7 @@ export async function initDb() {
       { id: 2, title: 'Почему мы перешли с React на Svelte и не пожалели', content: 'Расскажу о нашем опыте миграции с React на Svelte.', category: 'Frontend', author_id: 1, views: 0, votes: 89, is_pinned: 1, is_hot: 0, tags: 'react,svelte,frontend', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
       { id: 3, title: 'Безопасность Kubernetes: как закрыть дыры в CI/CD', content: 'Давайте разберём основные вектор атаки в K8s.', category: 'DevOps', author_id: 1, views: 0, votes: 45, is_pinned: 0, is_hot: 0, tags: 'kubernetes,security', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
       { id: 4, title: 'Обзор новых фич TypeScript 5.4', content: 'TypeScript 5.4 принёс несколько интересных улучшений.', category: 'Languages', author_id: 1, views: 0, votes: 12, is_pinned: 0, is_hot: 0, tags: 'typescript', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 5, title: 'Как мы разгоняли CI с 25 до 6 минут', content: 'Гайд по ускорению пайплайна: параллельные джобы, кэш зависимостей, разбиение тестов на шарды и отказ от лишних Docker-слоёв.\n\nОсновные шаги:\n- Кэшируем `node_modules`/пакеты пакетного менеджера между запусками\n- Гоняем lint, unit- и e2e-тесты параллельно, а не последовательно\n- Разбиваем большие test-suite на шарды по времени выполнения\n- Собираем Docker-образ один раз и переиспользуем между джобами', category: 'Articles', author_id: 1, views: 0, votes: 31, is_pinned: 0, is_hot: 0, tags: 'ci,devops,gайд', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     ];
     _db.data.posts.push(...posts);
     _db.data.categories = [
@@ -117,6 +164,7 @@ export async function initDb() {
       { id: 'sys', name: 'Администрирование' }, { id: 'career', name: 'Карьера' },
       { id: 'Backend', name: 'Backend' }, { id: 'Frontend', name: 'Frontend' }, { id: 'DevOps', name: 'DevOps' },
       { id: 'Languages', name: 'Languages' }, { id: 'Security', name: 'Security' }, { id: 'Career', name: 'Карьера' },
+      { id: 'Articles', name: 'Статьи', description: 'Статьи и гайды', icon: 'FileText', color: '#a855f7' },
     ];
     _db.data.messages = [
       { id: 1, user_id: 1, username: 'admin_dev', content: 'Добро пожаловать на форум!', created_at: new Date().toISOString() },
@@ -165,7 +213,7 @@ function calculateHotScore(thread) {
 }
 
 const CAT_MAP = { dev: ['Backend', 'Frontend', 'Languages'], sec: ['Security'], sys: ['DevOps'], career: ['Career'] };
-const DIRECT_CATS = ['Backend', 'Frontend', 'DevOps', 'Languages', 'Security', 'Career'];
+const DIRECT_CATS = ['Backend', 'Frontend', 'DevOps', 'Languages', 'Security', 'Career', 'Articles'];
 const RANKS = [
   { id: 'Юзер', color: 'text-slate-400' },
   { id: 'Боец', color: 'text-blue-400' },

@@ -119,7 +119,7 @@ export async function updateSettings(req, res) {
     }
     if (!newPassword || !confirmPassword) return res.status(400).json({ error: 'Заполните новый пароль и подтверждение' });
     if (newPassword !== confirmPassword) return res.status(400).json({ error: 'Пароли не совпадают' });
-    if (newPassword.length < 4) return res.status(400).json({ error: 'Новый пароль минимум 4 символа' });
+    if (newPassword.length < 8) return res.status(400).json({ error: 'Новый пароль минимум 8 символов' });
     data.password = bcrypt.hashSync(newPassword, 10);
   }
 
@@ -155,8 +155,8 @@ export async function changePassword(req, res) {
   if (!currentPassword || !newPassword) {
     return res.status(400).json({ error: 'Укажите текущий и новый пароль' });
   }
-  if (newPassword.length < 4) {
-    return res.status(400).json({ error: 'Новый пароль минимум 4 символа' });
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Новый пароль минимум 8 символов' });
   }
   const user = db.users.getById(req.user.id);
   if (!user || !bcrypt.compareSync(currentPassword, user.password)) {

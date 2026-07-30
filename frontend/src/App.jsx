@@ -1,2707 +1,40 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
-  Search, MessageSquare, User, Code, Terminal, Briefcase, Shield,
-  ChevronRight, MessageCircle, TrendingUp, MessageSquarePlus, Zap, Lock,
-  FileText, ExternalLink, Award, Crown, X, ChevronLeft,
-  Send, SendHorizontal, Eye, Activity, Trophy, Pencil, ImagePlus, Image, List, Smile, Video,
-  Heart, ThumbsUp, Gift, Users, ChevronDown, Plus, Trash2, UserPlus, UserMinus, Settings, Camera, Share2, Link, Repeat2, Paperclip, Folder, Palette, Download, Save, ArrowUpRight, Clock, Flame, Pin, PanelRight, Copy, Play, RefreshCw, EyeOff, Key, Wand2
+  Search, MessageSquare, User, Shield,
+  ChevronRight, MessageCircle, MessageSquarePlus, Zap, Lock,
+  FileText, Award, X, ChevronLeft,
+  Send, SendHorizontal, Trophy, Pencil, Image, List, Smile,
+  Heart, ThumbsUp, Users, Trash2, UserPlus, UserMinus, Settings, Share2, Link, Repeat2, Paperclip, Folder, Download, Save, ArrowUpRight
 } from 'lucide-react';
-
-const LUCIDE_ICONS = { Code, Shield, Terminal, Briefcase, MessageSquare, MessageCircle, Folder, FileText, Zap, Lock, List, Activity, Award };
-const getIconComponent = (iconName) => LUCIDE_ICONS[iconName] || MessageSquare;
 import * as api from './api';
 
-const theme = {
-  bg: 'bg-[var(--bg-main)]',
-  card: 'bg-[var(--bg-block)]',
-  cardHover: 'hover:bg-[#1c2128]',
-  border: 'border-[#30363d]',
-  accent: 'text-[var(--color-accent)]',
-  accentBg: 'bg-[var(--color-accent)]',
-  textMain: 'text-[var(--text-primary)]',
-  textDim: 'text-[#8b949e]',
-  textHeader: 'text-[var(--text-primary)]'
-};
-
-const DEFAULT_CATEGORIES = [
-  { id: 'all', name: 'Все темы', icon: 'MessageSquare', color: '#10b981' },
-  { id: 'dev', name: 'Разработка', icon: 'Code', color: '#10b981' },
-  { id: 'sec', name: 'Безопасность', icon: 'Shield', color: '#10b981' },
-  { id: 'sys', name: 'Администрирование', icon: 'Terminal', color: '#10b981' },
-  { id: 'career', name: 'Карьера', icon: 'Briefcase', color: '#10b981' },
-];
-
-const TOP_NAV = [
-  { id: 'forum', name: 'Форум' },
-  { id: 'articles', name: 'Статьи' },
-  { id: 'rules', name: 'Правила' },
-  { id: 'premium', name: 'Premium', color: 'text-[var(--color-accent)]' },
-];
-
-const DIRECT_POST_CATEGORIES = ['Backend', 'Frontend', 'DevOps', 'Languages', 'Security', 'Career'];
-
-const RANKS = [
-  { id: 'Юзер', color: 'text-slate-400' },
-  { id: 'Боец', color: 'text-blue-400' },
-  { id: 'Хранитель', color: 'text-cyan-400' },
-  { id: 'Модератор', color: 'text-purple-400' },
-  { id: 'Поверенный', color: 'text-amber-400' },
-  { id: 'Легенда', color: 'text-orange-400' },
-];
-const getRankColor = (rank) => RANKS.find(r => r.id === rank)?.color || 'text-slate-400';
-
-const RANK_GLOW = {
-  'Юзер': { hex: '#94a3b8', rgba: 'rgba(148,163,184,0.5)' },
-  'Боец': { hex: '#60a5fa', rgba: 'rgba(96,165,250,0.6)' },
-  'Хранитель': { hex: '#22d3ee', rgba: 'rgba(34,211,238,0.6)' },
-  'Модератор': { hex: '#a78bfa', rgba: 'rgba(167,139,250,0.6)' },
-  'Поверенный': { hex: '#fbbf24', rgba: 'rgba(251,191,36,0.6)' },
-  'Легенда': { hex: '#f97316', rgba: 'rgba(249,115,22,0.6)' },
-  'default': { hex: 'var(--color-accent)', rgba: 'rgba(168,85,247,0.5)' },
-};
-const getAvatarGlowStyles = (rank) => {
-  const r = displayRank(rank);
-  const glow = RANK_GLOW[r] || RANK_GLOW.default;
-  return { borderColor: glow.hex, boxShadow: `0 0 30px ${glow.rgba}` };
-};
-
-const getAvatarUrl = (u) => u?.custom_avatar || u?.avatar || null;
-const getDisplayName = (u) => u?.nickname || u?.username || 'user';
-const isPlaceholderUrl = (url) => !url || typeof url !== 'string' || url.includes('unsplash') || url.includes('dicebear') || url.includes('placeholder') || url.includes('yandex');
-const getWallAvatarUrl = (u) => (u?.custom_avatar || u?.avatar) && !isPlaceholderUrl(u?.custom_avatar || u?.avatar) ? (u.custom_avatar || u.avatar) : null;
-
-const FIVE_MINUTES = 5 * 60 * 1000;
-// Status MUST use ONLY user.last_online. Never use chat.updatedAt, lastMessage timestamp, or new Date() fallback.
-const isOnline = (user) => {
-  if (!user || !user.last_online) return false;
-  const lastSeen = new Date(user.last_online).getTime();
-  if (Number.isNaN(lastSeen)) return false;
-  const diff = Date.now() - lastSeen;
-  return diff < FIVE_MINUTES;
-};
-const getUserStatus = (u) => {
-  if (isOnline(u)) return { isOnline: true, label: 'В сети' };
-  if (!u?.last_online) return { isOnline: false, label: 'Офлайн' };
-  return { isOnline: false, label: `Был(а) в сети ${formatTimeAgo(u.last_online)}` };
-};
-const getChatUserStatus = getUserStatus;
-const formatTimeAgo = (timestamp) => {
-  const sec = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
-  if (sec < 60) return 'только что';
-  if (sec < 3600) return `${Math.floor(sec / 60)} мин назад`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)} ч назад`;
-  if (sec < 604800) return `${Math.floor(sec / 86400)} дн назад`;
-  if (sec < 2592000) return `${Math.floor(sec / 604800)} нед назад`;
-  return `${Math.floor(sec / 2592000)} мес назад`;
-};
-
-const AvatarWithFallback = ({ src, alt, fallbackLetter, className = '' }) => {
-  const [errored, setErrored] = useState(false);
-  const displaySrc = errored || !src ? null : src;
-  const letter = (fallbackLetter || alt || '?').charAt(0).toUpperCase();
-  return displaySrc ? (
-    <img src={displaySrc} alt={alt || ''} className={className} onError={() => setErrored(true)} />
-  ) : (
-    <div className={`${className} bg-slate-600 flex items-center justify-center text-white font-bold`} style={{ fontSize: '0.65em' }}>{letter}</div>
-  );
-};
-
-const UserLink = ({ userId, username, avatarUrl, rank, rankColor, size = 'md', onClick }) => {
-  const s = size === 'xs' ? 'w-6 h-6' : size === 'sm' ? 'w-8 h-8' : size === 'md' ? 'w-10 h-10' : 'w-12 h-12';
-  const handleClick = (e) => { e.stopPropagation(); onClick?.(userId); };
-  const color = rankColor || getRankColor(rank);
-  return (
-    <button type="button" onClick={handleClick} className="flex items-center gap-2 hover:opacity-90 transition-opacity text-left group">
-      <div className={`${s} rounded-lg bg-slate-800 flex-shrink-0 overflow-hidden ring-2 ring-transparent group-hover:ring-[var(--color-accent)]/30 transition-all`}>
-        <AvatarWithFallback src={avatarUrl} alt={username} fallbackLetter={username} className="w-full h-full object-cover" />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`text-xs font-bold ${color} group-hover:text-[var(--color-accent)] transition-colors`}>{username}</span>
-        {rank && <UserBanner rank={rank} color={color} />}
-      </div>
-    </button>
-  );
-};
-
-const UserBanner = ({ rank, color }) => {
-  const c = color || getRankColor(rank);
-  return (
-    <span className={`text-[10px] uppercase font-semibold tracking-widest px-1.5 py-0.5 rounded border border-white/10 bg-white/5 ${c} flex items-center gap-1`}>
-      {(rank === 'Легенда' || rank === 'Legend') && <Crown size={8} />}
-      {rank}
-    </span>
-  );
-};
-
-const displayRank = (r) => (r === 'User' ? 'Юзер' : r === 'Legend' ? 'Легенда' : r || 'Юзер');
-
-function ProfileBanner({ coverUrl, isOwnProfile, onCoverChange }) {
-  const fileInputRef = useRef(null);
-  const [coverLoading, setCoverLoading] = useState(false);
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !onCoverChange) return;
-    if (file.size > 10 * 1024 * 1024) return;
-    if (!file.type.startsWith('image/')) return;
-    setCoverLoading(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        await onCoverChange(reader.result);
-      } finally {
-        setCoverLoading(false);
-        e.target.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-  return (
-    <div className="relative w-full h-[250px] rounded-t-2xl overflow-hidden group">
-      {coverUrl ? (
-        <img src={coverUrl} alt="" className="w-full h-full object-cover" />
-      ) : (
-        <div className="w-full h-full bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-700" />
-      )}
-      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" aria-hidden />
-      {isOwnProfile && (
-        <>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={coverLoading}
-            className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 backdrop-blur-md text-white/90 hover:bg-black/50 hover:text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg flex items-center gap-1.5 text-xs sm:text-sm font-medium disabled:opacity-50"
-          >
-            <Camera size={14} className="sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">{coverLoading ? 'Загрузка...' : 'Обложка'}</span>
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-        </>
-      )}
-    </div>
-  );
-}
-
-function TrophyCarousel({ trophies, emptyMessage = 'Нет трофеев', bgGradientFrom = '#222' }) {
-  const scrollRef = useRef(null);
-  const onWheel = (e) => {
-    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-      e.preventDefault();
-      if (scrollRef.current) scrollRef.current.scrollLeft += e.deltaY || e.deltaX;
-    }
-  };
-  if (!trophies?.length) return <p className="text-[#666] text-sm">{emptyMessage}</p>;
-  return (
-    <div className="relative w-full max-w-full overflow-hidden">
-      <div
-        ref={scrollRef}
-        onWheel={onWheel}
-        className="flex flex-nowrap gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory py-2 -mx-1 px-1"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        {trophies.map((t) => (
-          <div
-            key={t.id}
-            className="relative flex flex-col items-center flex-shrink-0 w-24 snap-center transition-all duration-200 ease-out hover:scale-110 hover:z-50 hover:drop-shadow-[0_4px_12px_rgba(16,185,129,0.35)] cursor-default"
-            title={t.description || t.name}
-          >
-            <div className="w-20 h-20 rounded-lg overflow-hidden bg-transparent border border-[#404040] flex items-center justify-center ring-2 ring-transparent hover:ring-[var(--color-accent)]/40 transition-all">
-              {t.image_url ? <img src={t.image_url} alt={t.name} className="w-full h-full object-contain" /> : <Trophy size={28} className="text-[var(--color-accent)]" />}
-            </div>
-            <span className="text-[10px] text-[#888] font-bold uppercase mt-1.5 text-center text-xs break-words leading-tight w-full">{t.name}</span>
-          </div>
-        ))}
-      </div>
-      <div className="absolute right-0 top-0 bottom-6 w-12 pointer-events-none" style={{ background: `linear-gradient(to left, ${bgGradientFrom}, transparent)` }} aria-hidden />
-    </div>
-  );
-}
-
-function ThreadActions({ thread, user, onCopyLink, onRepost, onEdit, onDelete, setToast }) {
-  const [isLiked, setIsLiked] = useState(thread?.liked ?? false);
-  const [likesCount, setLikesCount] = useState(thread?.likes_count ?? 0);
-  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
-  const shareRef = useRef(null);
-
-  useEffect(() => {
-    setIsLiked(thread?.liked ?? false);
-    setLikesCount(thread?.likes_count ?? 0);
-  }, [thread?.id, thread?.liked, thread?.likes_count]);
-
-  useEffect(() => {
-    const h = (e) => { if (shareRef.current && !shareRef.current.contains(e.target)) setIsShareMenuOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  const handleLike = async () => {
-    if (!user) { setToast?.({ message: 'Войдите для лайка', type: 'error' }); return; }
-    const prevLiked = isLiked;
-    const prevCount = likesCount;
-    setIsLiked(!prevLiked);
-    setLikesCount(prevCount + (prevLiked ? -1 : 1));
-    try {
-      const { likes, liked } = await api.likePost(thread.id);
-      setLikesCount(likes);
-      setIsLiked(liked);
-    } catch {
-      setIsLiked(prevLiked);
-      setLikesCount(prevCount);
-      setToast?.({ message: 'Ошибка лайка', type: 'error' });
-    }
-  };
-
-  const handleCopyLink = () => {
-    onCopyLink?.();
-    setIsShareMenuOpen(false);
-  };
-
-  const [repostModalOpen, setRepostModalOpen] = useState(false);
-  const [repostComment, setRepostComment] = useState('');
-
-  const handleRepostClick = () => {
-    setRepostModalOpen(true);
-    setRepostComment('');
-  };
-
-  const handleRepostSubmit = async () => {
-    await onRepost?.(repostComment);
-    setRepostModalOpen(false);
-    setIsShareMenuOpen(false);
-  };
-
-  const canEdit = user && (thread?.author_id === user.id || user.is_admin || user.id === 1 || user.username === 'admin_dev');
-
-  return (
-    <div className="flex items-center justify-between w-full">
-      <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={handleLike}
-          disabled={!user}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${isLiked ? 'text-red-500' : 'text-[#8b949e] hover:text-red-400'} hover:bg-white/5`}
-        >
-          <Heart size={18} className={isLiked ? 'fill-current' : ''} />
-          <span>{likesCount}</span>
-        </button>
-        <div className="relative" ref={shareRef}>
-          <button
-            type="button"
-            onClick={() => setIsShareMenuOpen((v) => !v)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#8b949e] hover:text-white hover:bg-white/10 transition-all"
-          >
-            <Share2 size={18} />
-            <span className="hidden sm:inline">Поделиться</span>
-          </button>
-        {isShareMenuOpen && (
-          <div className="absolute left-0 bottom-full mb-2 z-[100] min-w-[200px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-xl overflow-hidden">
-            <button type="button" onClick={handleCopyLink} className="w-full text-left px-4 py-3 text-sm text-[#c9d1d9] hover:bg-white/5 flex items-center gap-2 transition-colors">
-              <Link size={14} /> Скопировать ссылку
-            </button>
-            <button type="button" onClick={handleRepostClick} disabled={!user} className="w-full text-left px-4 py-3 text-sm text-[#c9d1d9] hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 transition-colors">
-              <Repeat2 size={14} /> Репостнуть на стену
-            </button>
-          </div>
-        )}
-        </div>
-      </div>
-      {repostModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setRepostModalOpen(false)}>
-          <div className="bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl p-5 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-medium text-white mb-3">Добавить комментарий?</p>
-            <textarea value={repostComment} onChange={(e) => setRepostComment(e.target.value)} placeholder="Ваш комментарий к репосту (необязательно)..." className="w-full min-h-[80px] py-2 px-3 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[var(--color-accent)] resize-none mb-4" />
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setRepostModalOpen(false)} className="px-4 py-2 text-[#8b949e] hover:text-white rounded-lg text-sm font-medium">Отмена</button>
-              <button type="button" onClick={handleRepostSubmit} className="px-4 py-2 bg-[var(--color-accent)] text-black rounded-lg text-sm font-bold hover:opacity-90">Опубликовать</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {canEdit && (onEdit || onDelete) && (
-        <div className="flex items-center gap-2">
-          {onEdit && (
-            <button type="button" onClick={onEdit} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors" title="Редактировать">
-              <Pencil size={18} />
-            </button>
-          )}
-          {onDelete && (
-            <button type="button" onClick={onDelete} className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors" title="Удалить">
-              <Trash2 size={18} />
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function RankBadge({ userId, currentRank, currentColor, isAdmin, onRankChange, loading, glow = false }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const h = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-  const rank = displayRank(currentRank);
-  const color = currentColor || getRankColor(rank);
-  const glowStyles = glow ? { textShadow: `0 0 12px ${(RANK_GLOW[rank] || RANK_GLOW.default).rgba}` } : {};
-  if (!isAdmin) {
-    return (
-      <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-[var(--bg-main)] border border-current ${color}`} style={glowStyles}>
-        {rank}
-      </span>
-    );
-  }
-  return (
-    <div ref={ref} className="relative inline-block">
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
-        disabled={loading}
-        className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-[var(--bg-main)] border border-current ${color} hover:border-[var(--color-accent)]/50 hover:bg-[#1c2128] transition-colors cursor-pointer disabled:opacity-50 select-none`}
-        style={glowStyles}
-      >
-        {rank}
-        <ChevronDown size={10} className={open ? 'rotate-180' : ''} />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 min-w-[120px] bg-[var(--bg-block)] border border-[#30363d] rounded-lg shadow-xl overflow-hidden">
-          {RANKS.map(r => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={async () => {
-                setOpen(false);
-                const equiv = (a, b) => a === b || (a === 'User' && b === 'Юзер') || (a === 'Legend' && b === 'Легенда');
-                if (equiv(currentRank, r.id)) return;
-                try {
-                  await onRankChange(r.id);
-                } catch {}
-              }}
-              className={`w-full text-left px-3 py-2 text-xs font-bold hover:bg-[#1c2128] transition-colors ${r.color}`}
-            >
-              {r.id}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SimpleMarkdown({ children, emojis }) {
-  const text = String(children || '');
-  if (!text.trim()) return null;
-  const emojiMap = (emojis || []).reduce((acc, e) => {
-    if (e?.code && e?.type === 'image' && e?.value) acc[e.code.toLowerCase()] = e.value;
-    return acc;
-  }, {});
-  const parts = text.split(/(```[\s\S]*?```)/g);
-  const renderText = (t) => {
-    let out = t;
-    out = out.replace(/:([a-zA-Z0-9_]+):/g, (match) => {
-      const code = ':' + match.slice(1, -1) + ':';
-      const src = emojiMap[code.toLowerCase()];
-      return src ? `<img src="${src.replace(/"/g, '&quot;')}" alt="" class="inline-block w-6 h-6 align-middle mx-0.5" />` : match;
-    });
-    return out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\n/g, '<br/>');
-  };
-  return (
-    <div className="prose-emerald">
-      {parts.map((p, i) =>
-        p.startsWith('```') ? (
-          <pre key={i} className="bg-[var(--bg-main)] p-4 rounded-lg border border-[#30363d] overflow-x-auto my-4">
-            <code className="text-[var(--color-accent)] text-sm">{p.replace(/^```\w*\n?|```$/g, '').trim()}</code>
-          </pre>
-        ) : (
-          <div key={i} dangerouslySetInnerHTML={{ __html: renderText(p) }} className="[&_strong]:text-[var(--color-accent)] [&_strong]:font-bold [&_code]:bg-[var(--bg-main)] [&_code]:text-[var(--color-accent)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_code]:border [&_code]:border-[#30363d]" />
-        )
-      )}
-    </div>
-  );
-}
-
-function PlusIcon({ size, className }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
-
-function PostSkeleton() {
-  return (
-    <div className="p-5 flex items-center gap-4 animate-pulse">
-      <div className="flex-1 space-y-2">
-        <div className="h-4 bg-[#30363d] rounded w-3/4" />
-        <div className="h-3 bg-[#30363d] rounded w-1/2" />
-      </div>
-    </div>
-  );
-}
-
-function PostCard({ post, onClick, onAuthorClick, categoryColor, onViewImage }) {
-  const color = categoryColor || '#10b981';
-  const hasCover = post.cover_image;
-  return (
-    <div onClick={() => onClick(post)} className={`group flex items-center gap-4 hover:bg-[#1c2128] transition-colors cursor-pointer overflow-hidden ${hasCover ? 'min-h-[100px]' : ''}`}>
-      <div className="flex-1 min-w-0 p-5 flex flex-col justify-center">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border border-white/10 bg-white/5 shrink-0" style={{ color, borderColor: `${color}40` }}>{post.category}</span>
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <div className="flex items-center gap-2 min-w-0">
-              {post.is_hot_trending ? <Flame size={16} className="text-orange-500 animate-pulse shrink-0 drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]" title="Горячая тема" /> : null}
-              <h4 className="font-bold text-white text-lg leading-tight break-all line-clamp-2 overflow-hidden min-w-0 group-hover:text-[var(--color-accent)] transition-colors">
-                {post.title}
-              </h4>
-            </div>
-          </div>
-          {post.is_pinned ? <span className="text-[9px] text-amber-400 shrink-0">Закреплено</span> : null}
-        </div>
-        <div className="flex items-center gap-3 text-[11px] text-slate-500">
-          {onAuthorClick && post.author_id ? (
-            <UserLink userId={post.author_id} username={post.author} avatarUrl={post.author_avatar || getAvatarUrl({ username: post.author })} rank={post.rank} rankColor={post.rank_color} size="sm" onClick={onAuthorClick} />
-          ) : (
-            <>
-              <span className={`font-semibold text-slate-200 ${post.rank_color || 'text-slate-400'}`}>{post.author}</span>
-              <UserBanner rank={post.rank || 'User'} color={post.rank_color || 'text-slate-400'} />
-            </>
-          )}
-          <span className="text-slate-600">•</span>
-          <span>{post.time}</span>
-          <span className="flex items-center gap-1 ml-auto text-slate-500"><MessageSquare size={12} /> {post.replies ?? 0}</span>
-          <span className="flex items-center gap-1 text-slate-500"><Eye size={12} /> {post.views ?? 0}</span>
-        </div>
-      </div>
-      {hasCover && (
-        <div className="w-24 sm:w-28 h-28 flex-shrink-0 relative overflow-hidden rounded-xl" onClick={(e) => e.stopPropagation()}>
-          <div className="absolute inset-0 bg-gradient-to-l from-[var(--bg-block)] to-transparent z-10 pointer-events-none" />
-          <img src={post.cover_image} alt="" className="w-full h-full object-cover object-center cursor-zoom-in" onClick={(e) => { e.stopPropagation(); onViewImage?.([post.cover_image], 0); }} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
-
-function ContentWithEmojis({ text, emojis, className }) {
-  if (!text) return null;
-  const emojiMap = (emojis || []).reduce((acc, e) => {
-    if (e.code) acc[e.code.toLowerCase()] = e;
-    return acc;
-  }, {});
-  const parts = String(text).split(/(:[a-zA-Z0-9_]+:)/g);
-  return (
-    <span className={className}>
-      {parts.map((p, i) => {
-        if (p.startsWith(':') && p.endsWith(':')) {
-          const e = emojiMap[p.toLowerCase()];
-          if (e?.type === 'image' && e?.value) {
-            return <img key={i} src={e.value} alt="" className="inline-block w-6 h-6 align-middle mx-0.5" />;
-          }
-        }
-        return <span key={i}>{p}</span>;
-      })}
-    </span>
-  );
-}
-
-function UnifiedEmojiPicker({ emojis, onSelect, open, onClose, anchorRef, className }) {
-  if (!open) return null;
-  const list = emojis || [];
-  return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
-      <div
-        className={`emoji-picker-enter absolute bottom-full left-0 mb-3 z-50 w-72 h-64 overflow-hidden rounded-2xl bg-black/60 backdrop-blur-xl border border-[var(--color-accent)]/20 shadow-2xl shadow-[var(--color-accent)]/5 transition-all duration-200 ease-out ${className || ''}`}
-      >
-        <div className="grid grid-cols-6 gap-2 p-3 h-full overflow-y-auto overflow-x-hidden scrollbar-picker">
-          {list.map((e) => (
-            <button
-              key={e.id}
-              type="button"
-              onClick={() => {
-                const insert = e.type === 'unicode' ? e.value : (e.code || `:${e.name}:`);
-                onSelect?.(insert, e.type);
-                onClose?.();
-              }}
-              className="aspect-square flex items-center justify-center rounded-xl bg-white/[0.03] hover:bg-white/10 hover:scale-110 hover:shadow-[0_0_10px_-5px_var(--color-accent)] transition-all duration-200 cursor-pointer"
-              title={e.code}
-            >
-              {e.type === 'unicode' ? (
-                <span className="text-2xl">{e.value}</span>
-              ) : (
-                <img src={e.value} alt="" className="w-8 h-8 object-contain drop-shadow-sm" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function SharedContentSidebar({ media, files, links, activeTab, onTabChange, searchQuery, onSearchChange, onClose, scrollToMessage }) {
-  const [videoErrors, setVideoErrors] = useState(new Set());
-  useEffect(() => { setVideoErrors(new Set()); }, [media]);
-  const filterItems = (items, getText) => {
-    if (!searchQuery.trim()) return items;
-    const q = searchQuery.toLowerCase().trim();
-    return items.filter((item) => getText(item).toLowerCase().includes(q));
-  };
-  const filteredMedia = filterItems(media, (m) => m.name || m.url || '');
-  const filteredFiles = filterItems(files, (f) => f.name || f.url || '');
-  const filteredLinks = filterItems(links, (l) => l.url || '');
-  return (
-    <aside className="w-80 border-l border-white/5 bg-[#0a0a0a]/40 backdrop-blur-xl flex flex-col animate-slideLeft shrink-0">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between">
-        <h3 className="font-bold text-sm uppercase tracking-widest text-gray-400">Вложения</h3>
-        <button type="button" onClick={onClose} className="p-1 text-gray-500 hover:text-white transition-colors">
-          <X size={18} />
-        </button>
-      </div>
-      <div className="p-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Поиск..."
-          className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-[var(--color-accent)]/50"
-        />
-      </div>
-      <div className="flex p-2 gap-1 bg-white/5 mx-2 rounded-lg">
-        {['Медиа', 'Файлы', 'Ссылки'].map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => onTabChange(tab)}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${activeTab === tab ? 'bg-white/10 text-white' : 'hover:bg-white/10 text-gray-400'}`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 scrollbar-thin-purple min-h-0">
-        {activeTab === 'Медиа' && (
-          <div className="grid grid-cols-3 gap-2">
-            {filteredMedia.length === 0 ? (
-              <p className="col-span-3 text-xs text-gray-500 py-4 text-center">Нет медиафайлов</p>
-            ) : (
-              filteredMedia.map((item, i) => {
-                const mediaKey = `${item.messageId}-${i}`;
-                const videoFailed = videoErrors.has(mediaKey);
-                return (
-                <div
-                  key={mediaKey}
-                  role="button"
-                  tabIndex={0}
-                  className="relative aspect-square group cursor-pointer overflow-hidden rounded-lg bg-white/5 border border-white/10 hover:border-[var(--color-accent)]/50 transition-colors"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (item.messageId && scrollToMessage) {
-                      scrollToMessage(item.messageId);
-                      onClose?.();
-                    }
-                  }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToMessage?.(item.messageId); onClose?.(); } }}
-                >
-                  {item.type === 'image' ? (
-                    <img src={item.url} alt="" className="w-full h-full object-cover" />
-                  ) : item.type === 'video' && !videoFailed ? (
-                    <>
-                      <video
-                        src={`${item.url}#t=0.5`}
-                        preload="metadata"
-                        muted
-                        playsInline
-                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                        onError={() => setVideoErrors((prev) => new Set([...prev, mediaKey]))}
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-transparent transition-all pointer-events-none">
-                        <Play size={20} className="text-white drop-shadow-md" fill="currentColor" />
-                      </div>
-                      <div className="absolute bottom-1 right-1 bg-black/60 text-[10px] px-1.5 py-0.5 rounded text-white pointer-events-none">
-                        <Video size={10} className="inline mr-0.5 align-middle" />
-                        Видео
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-white/5">
-                      <Video size={24} className="text-[var(--color-accent)]" />
-                    </div>
-                  )}
-                </div>
-              ); })
-            )}
-          </div>
-        )}
-        {activeTab === 'Файлы' && (
-          <div className="space-y-2">
-            {filteredFiles.length === 0 ? (
-              <p className="text-xs text-gray-500 py-4 text-center">Нет файлов</p>
-            ) : (
-              filteredFiles.map((item, i) => (
-                <div
-                  key={`${item.messageId}-${i}`}
-                  role="button"
-                  tabIndex={0}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (item.messageId && scrollToMessage) {
-                      scrollToMessage(item.messageId);
-                      onClose?.();
-                    }
-                  }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToMessage?.(item.messageId); onClose?.(); } }}
-                >
-                  <FileText size={20} className="text-[var(--color-accent)] shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white truncate">{item.name}</p>
-                    <p className="text-[10px] text-gray-500">{item.size ? `${(item.size / 1024).toFixed(1)} KB` : ''}</p>
-                  </div>
-                  <a href={item.url} download={item.name} onClick={(e) => e.stopPropagation()} className="p-1.5 text-gray-500 hover:text-white transition-colors shrink-0" title="Скачать">
-                    <Download size={14} />
-                  </a>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-        {activeTab === 'Ссылки' && (
-          <div className="space-y-2">
-            {filteredLinks.length === 0 ? (
-              <p className="text-xs text-gray-500 py-4 text-center">Нет ссылок</p>
-            ) : (
-              filteredLinks.map((item, i) => (
-                <div
-                  key={`${item.messageId}-${i}`}
-                  role="button"
-                  tabIndex={0}
-                  className="flex items-center gap-2 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group cursor-pointer"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (item.messageId && scrollToMessage) {
-                      scrollToMessage(item.messageId);
-                      onClose?.();
-                    }
-                  }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToMessage?.(item.messageId); onClose?.(); } }}
-                >
-                  <Link size={16} className="text-[var(--color-accent)] shrink-0" />
-                  <span className="flex-1 text-sm text-[var(--color-accent)] truncate">{item.url}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(item.url); }}
-                    className="p-1.5 text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity rounded"
-                    title="Копировать"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity rounded" title="Открыть в новой вкладке">
-                    <ExternalLink size={14} />
-                  </a>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-    </aside>
-  );
-}
-
-function AIAssistantPanel({ user, activeChatUser, aiAnalysis, aiDraft, aiLoading, onApplyDraft, onRegenerate, onSendDraft, onClose, onOpenProfile, onOpenSettings }) {
-  const hasKey = user?.has_openai_key;
-  return (
-    <aside className="w-80 border-l border-white/5 bg-[#0a0a0a]/40 backdrop-blur-xl flex flex-col animate-slideLeft shrink-0">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between">
-        <h3 className="font-bold text-sm uppercase tracking-widest text-gray-400 flex items-center gap-2">
-          <Wand2 size={16} className="text-[var(--color-accent)]" />
-          AI Ассистент
-        </h3>
-        <button type="button" onClick={onClose} className="p-1 text-gray-500 hover:text-white transition-colors">
-          <X size={18} />
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 scrollbar-thin-purple min-h-0">
-        {!hasKey ? (
-          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-            <Key size={40} className="text-[var(--color-accent)]/50 mb-4" />
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Пожалуйста, добавьте ваш OpenAI API Key в настройках, чтобы активировать ассистента.
-            </p>
-            <button
-              type="button"
-              onClick={() => { onClose?.(); (onOpenSettings || onOpenProfile)?.(); }}
-              className="mt-4 text-xs text-[var(--color-accent)] hover:underline"
-            >
-              Перейти в настройки →
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col h-full min-h-[200px] space-y-4">
-            <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg shadow-[0_0_20px_rgba(59,130,246,0.1)]">
-              <p className="text-[10px] text-blue-400 font-bold uppercase mb-1">Анализ контекста</p>
-              {aiLoading ? (
-                <p className="text-xs text-gray-400 flex items-center gap-2">
-                  <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  GPT думает...
-                </p>
-              ) : (
-                <p className="text-xs text-gray-300">{aiAnalysis || 'Выберите чат. AI проанализирует последние сообщения и предложит ответ.'}</p>
-              )}
-            </div>
-            <div className="flex-1 bg-black/20 rounded-lg p-3 border border-white/5 min-h-[80px]">
-              <p className="text-[10px] text-gray-500 mb-2 uppercase">Черновик ответа:</p>
-              <textarea
-                readOnly
-                value={aiDraft || ''}
-                className="w-full h-24 sm:h-32 bg-transparent border-none text-sm text-gray-200 resize-none focus:outline-none placeholder:text-gray-600"
-                placeholder={aiLoading ? '...' : 'Черновик появится после анализа'}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onApplyDraft?.(aiDraft)}
-                disabled={!aiDraft || aiLoading}
-                className="bg-[var(--color-accent)] text-white text-xs py-2 rounded-md font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-1.5"
-              >
-                Вставить в поле ввода
-              </button>
-              <button
-                type="button"
-                onClick={() => onRegenerate?.()}
-                disabled={aiLoading}
-                className="bg-white/10 text-white text-xs py-2 rounded-md font-bold hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw size={12} className={aiLoading ? 'animate-spin' : ''} />
-                Перегенерировать
-              </button>
-              <button
-                type="button"
-                onClick={() => onSendDraft?.(aiDraft)}
-                disabled={!aiDraft || aiLoading}
-                className="col-span-2 bg-indigo-500/80 text-white text-xs py-2 rounded-md font-bold hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5"
-              >
-                <SendHorizontal size={12} />
-                Отправить сразу
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </aside>
-  );
-}
-
-const inputFocusClass = 'focus:outline-none focus:border-[var(--color-accent)]/50 focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:shadow-[0_0_20px_rgba(16,185,129,0.15)] transition-all';
-
-function SettingsPage({ user, setUser, setToast, onBack, onSaveSuccess, onMountRefresh }) {
-  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
-  const userClearedKeyToEdit = useRef(false);
-  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
-  const [login, setLogin] = useState(user?.username || '');
-  const [nickname, setNickname] = useState(user?.nickname || '');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [profileVisibility, setProfileVisibility] = useState(user?.settings?.privacy?.profile_visibility || 'everyone');
-  const [showOnlineStatus, setShowOnlineStatus] = useState(user?.settings?.privacy?.show_online_status !== false);
-  const [messageAccess, setMessageAccess] = useState(user?.settings?.privacy?.message_access || 'all');
-  const [saving, setSaving] = useState(false);
-  const [currentPasswordError, setCurrentPasswordError] = useState(false);
-  const [passwordShake, setPasswordShake] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
-  useEffect(() => {
-    setLogin(user?.username || '');
-    setNickname(user?.nickname != null ? user.nickname : '');
-    setProfileVisibility(user?.settings?.privacy?.profile_visibility || 'everyone');
-    setShowOnlineStatus(user?.settings?.privacy?.show_online_status !== false);
-    setMessageAccess(user?.settings?.privacy?.message_access || 'all');
-  }, [user?.id, user?.username, user?.nickname, user?.settings?.privacy]);
-
-  useEffect(() => {
-    onMountRefresh?.();
-  }, [onMountRefresh]);
-
-  useEffect(() => {
-    userClearedKeyToEdit.current = false;
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (user?.has_openai_key && !userClearedKeyToEdit.current) {
-      setOpenaiKeyInput('•••• (ключ сохранён)');
-    } else if (!user?.has_openai_key && openaiKeyInput === '•••• (ключ сохранён)') {
-      setOpenaiKeyInput('');
-    }
-  }, [user?.has_openai_key]);
-
-  const changingLogin = login.trim().toLowerCase() !== (user?.username || '').toLowerCase();
-  const changingNickname = nickname.trim() !== (user?.nickname || '');
-  const changingPassword = newPassword || confirmPassword;
-  const needsPassword = changingPassword || changingLogin || changingNickname;
-
-  const handleSave = async (e) => {
-    e?.preventDefault();
-    if (!user?.id) return;
-    const hasOpenAIKeyToSave = openaiKeyInput?.trim();
-    if (needsPassword && !currentPassword?.trim()) {
-      setCurrentPasswordError(true);
-      setPasswordShake(true);
-      setTimeout(() => setPasswordShake(false), 500);
-      setToast({
-        message: 'Для смены логина, никнейма или пароля введите текущий пароль',
-        type: 'error',
-      });
-      return;
-    }
-    setCurrentPasswordError(false);
-    if (changingPassword) {
-      if (newPassword !== confirmPassword) {
-        setToast({ message: 'Пароли не совпадают', type: 'error' });
-        return;
-      }
-      if (!newPassword || newPassword.length < 4) {
-        setToast({ message: 'Новый пароль минимум 4 символа', type: 'error' });
-        return;
-      }
-    }
-    const loginTrimmed = login.trim().toLowerCase();
-    if (loginTrimmed && !/^[a-z0-9_]+$/.test(loginTrimmed)) {
-      setToast({ message: 'Логин: только a-z, 0-9 и _', type: 'error' });
-      return;
-    }
-    if (loginTrimmed && loginTrimmed.length < 2) {
-      setToast({ message: 'Логин минимум 2 символа', type: 'error' });
-      return;
-    }
-    setSaving(true);
-    try {
-      const openaiKeyValue = openaiKeyInput.trim() || undefined;
-      const isNewKeyTyped = openaiKeyValue && openaiKeyValue.length > 0 && !openaiKeyValue.startsWith('•');
-      if (openaiKeyValue && openaiKeyValue === loginTrimmed && !openaiKeyValue.startsWith('sk-')) {
-        setToast({ message: 'Ключ AI не может совпадать с логином. Введите корректный OpenAI API ключ (начинается с sk-).', type: 'error' });
-        setSaving(false);
-        return;
-      }
-      const settingsPayload = {
-        privacy: {
-          profile_visibility: profileVisibility,
-          show_online_status: showOnlineStatus,
-          message_access: messageAccess,
-        },
-      };
-      if (isNewKeyTyped) settingsPayload.openai_key = openaiKeyValue;
-      const payload = {
-        username: loginTrimmed || undefined,
-        nickname: nickname.trim() || undefined,
-        settings: settingsPayload,
-      };
-      if (needsPassword) payload.currentPassword = currentPassword;
-      if (changingPassword) {
-        payload.newPassword = newPassword;
-        payload.confirmPassword = confirmPassword;
-      }
-      const updated = await api.saveSettings(payload);
-      const keySaved = Boolean(updated?.has_openai_key ?? !!openaiKeyValue);
-      setUser((prev) => prev ? { ...prev, ...updated, has_openai_key: keySaved } : prev);
-      userClearedKeyToEdit.current = false;
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setCurrentPasswordError(false);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2000);
-      setToast({ message: 'Настройки успешно сохранены', type: 'success' });
-      onSaveSuccess?.();
-      setOpenaiKeyInput('');
-    } catch (err) {
-      const msg = err?.message || 'Ошибка сохранения';
-      setToast({ message: msg, type: 'error' });
-      if (msg.includes('пароль') || msg.includes('Старый пароль') || msg.includes('неверный')) {
-        setCurrentPasswordError(true);
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!user) {
-    return (
-      <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
-        <p className="text-gray-400">Войдите для доступа к настройкам</p>
-        <button onClick={onBack} className="mt-4 text-[var(--color-accent)] hover:underline text-sm">Назад</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-[11px] text-[#484f58] font-bold uppercase tracking-wider">
-        <button onClick={onBack} className="hover:text-[var(--color-accent)] transition-colors flex items-center gap-1">
-          <ChevronLeft size={14} />
-          Назад
-        </button>
-        <ChevronRight size={12} />
-        <span className="text-[var(--color-accent)]">Настройки</span>
-      </div>
-
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.2)]">
-        <div className="p-6 md:p-8 space-y-8">
-          {/* Интеграции */}
-          <section>
-            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Zap size={16} className="text-[var(--color-accent)]" />
-              Интеграции
-            </h3>
-            <div className="space-y-3">
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Этот ключ используется для работы вашего персонального AI-ассистента в чатах.
-              </p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type={showOpenaiKey ? 'text' : 'password'}
-                    value={openaiKeyInput}
-                    onChange={(e) => setOpenaiKeyInput(e.target.value)}
-                    onFocus={() => {
-                      if (openaiKeyInput === '•••• (ключ сохранён)') {
-                        userClearedKeyToEdit.current = true;
-                        setOpenaiKeyInput('');
-                      }
-                    }}
-                    onBlur={() => {
-                      if (openaiKeyInput === '' && user?.has_openai_key) {
-                        userClearedKeyToEdit.current = false;
-                        setOpenaiKeyInput('•••• (ключ сохранён)');
-                      }
-                    }}
-                    placeholder={user?.has_openai_key ? '•••• (ключ сохранён)' : 'OpenAI API Key'}
-                    autoComplete="new-password"
-                    className={`w-full pl-9 pr-10 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowOpenaiKey((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-white transition-colors rounded"
-                    title={showOpenaiKey ? 'Скрыть' : 'Показать'}
-                  >
-                    {showOpenaiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving || !openaiKeyInput?.trim() || openaiKeyInput === '•••• (ключ сохранён)'}
-                  className="px-4 py-3 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {saving ? '...' : 'Сохранить ключ'}
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Аккаунт */}
-          <section>
-            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
-              <User size={16} className="text-[var(--color-accent)]" />
-              Аккаунт
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Логин (ID для входа)</label>
-                <input
-                  type="text"
-                  value={login}
-                  onChange={(e) => setLogin(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())}
-                  placeholder="Только a-z, 0-9, _"
-                  autoComplete="off"
-                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Отображаемое имя (Никнейм)</label>
-                <input
-                  type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="Например: Никита"
-                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
-                />
-              </div>
-              <div className="pt-2 border-t border-white/5">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Смена пароля</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                      Текущий пароль {needsPassword && <span className="text-red-400">*</span>}
-                      {!needsPassword && <span className="text-gray-500 font-normal normal-case"> (только при смене логина, никнейма или пароля)</span>}
-                    </label>
-                    <input
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => {
-                        setCurrentPassword(e.target.value);
-                        if (currentPasswordError) setCurrentPasswordError(false);
-                      }}
-                      placeholder="Текущий пароль"
-                      autoComplete="new-password"
-                      className={`w-full px-4 py-3 text-sm bg-black/30 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass} ${currentPasswordError ? 'border-2 border-red-500/60 ring-2 ring-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.25)]' : 'border border-white/10'} ${passwordShake ? 'animate-shake' : ''}`}
-                    />
-                    {currentPasswordError && (
-                      <p className="mt-1.5 text-xs text-red-400">Введите текущий пароль для подтверждения изменений</p>
-                    )}
-                  </div>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Новый пароль"
-                    autoComplete="new-password"
-                    className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass}`}
-                  />
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Повторите новый пароль"
-                    autoComplete="new-password"
-                    className={`w-full px-4 py-3 text-sm bg-black/30 border rounded-lg text-white placeholder:text-gray-500 ${inputFocusClass} ${newPassword && confirmPassword && newPassword !== confirmPassword ? 'border-red-500/60 ring-2 ring-red-500/20' : 'border-white/10'}`}
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Приватность */}
-          <section>
-            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Lock size={16} className="text-[var(--color-accent)]" />
-              Приватность
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Видимость профиля</label>
-                <select
-                  value={profileVisibility}
-                  onChange={(e) => setProfileVisibility(e.target.value)}
-                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white ${inputFocusClass}`}
-                >
-                  <option value="everyone">Видят все</option>
-                  <option value="friends">Только подписчики</option>
-                  <option value="nobody">Скрытый профиль</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <label className="text-sm text-gray-300">Показывать, когда я в сети</label>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={showOnlineStatus}
-                  onClick={() => setShowOnlineStatus((v) => !v)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${showOnlineStatus ? 'bg-[var(--color-accent)]' : 'bg-white/10'}`}
-                >
-                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${showOnlineStatus ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Кто может писать мне в ЛС</label>
-                <select
-                  value={messageAccess}
-                  onChange={(e) => setMessageAccess(e.target.value)}
-                  className={`w-full px-4 py-3 text-sm bg-black/30 border border-white/10 rounded-lg text-white ${inputFocusClass}`}
-                >
-                  <option value="all">Все</option>
-                  <option value="friends">Только друзья</option>
-                  <option value="none">Никто</option>
-                </select>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <div className="px-6 md:px-8 py-4 border-t border-white/5 bg-black/20">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || (newPassword && confirmPassword && newPassword !== confirmPassword)}
-            className={`w-full sm:w-auto px-8 py-3 rounded-lg font-bold text-sm transition-all disabled:opacity-50 ${savedSuccess ? 'bg-emerald-500 text-white' : 'bg-[var(--color-accent)] text-black hover:bg-[var(--color-accent)]/90 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]'}`}
-          >
-            {saving ? 'Сохранение...' : savedSuccess ? 'Сохранено!' : 'Сохранить изменения'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MessagesPage({ user, activeChatUser, conversations, chatHistory, loading, onSelectContact, onSend, onDeleteMessage, onTogglePin, onUnpin, setToast, getAvatarUrl, openLightbox, emojis, onOpenProfile, onOpenSettings }) {
-  const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState([]);
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [pinnedMessage, setPinnedMessage] = useState(null);
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [showAIPanel, setShowAIPanel] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState('Медиа');
-  const [sidebarSearch, setSidebarSearch] = useState('');
-  const [sharedAttachments, setSharedAttachments] = useState({ media: [], files: [], links: [] });
-  const [loadingAttachments, setLoadingAttachments] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState('');
-  const [aiDraft, setAiDraft] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const lastAiTriggerRef = useRef(null);
-  const historyRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const emojiPickerRef = useRef(null);
-
-  const scrollToMessage = useCallback((messageId) => {
-    const el = historyRef.current?.querySelector(`[data-message-id="${messageId}"]`);
-    if (el) {
-      el.classList.add('message-highlight');
-      setTimeout(() => el.classList.remove('message-highlight'), 2000);
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, []);
-
-  useEffect(() => {
-    const pinned = chatHistory.find((m) => m.is_pinned);
-    setPinnedMessage(pinned || null);
-  }, [activeChatUser?.id, chatHistory]);
-
-  const handlePin = useCallback((message) => {
-    setPinnedMessage(message);
-    onTogglePin?.(message.id)?.catch?.((err) => {
-      setPinnedMessage(null);
-      setToast?.({ message: err?.message || 'Ошибка закрепления', type: 'error' });
-    });
-  }, [onTogglePin, setToast]);
-
-  const handleUnpin = useCallback(() => {
-    const prev = pinnedMessage;
-    setPinnedMessage(null);
-    if (!prev?.id || !onUnpin) return;
-    onUnpin(prev.id).catch(() => {
-      setPinnedMessage(prev);
-      setToast?.({ message: 'Ошибка открепления', type: 'error' });
-    });
-  }, [pinnedMessage, onUnpin, setToast]);
-  useEffect(() => { historyRef.current?.scrollTo(0, historyRef.current.scrollHeight); }, [chatHistory]);
-
-  useEffect(() => {
-    if (!user?.id || !activeChatUser?.id) {
-      setSharedAttachments({ media: [], files: [], links: [] });
-      return;
-    }
-    setLoadingAttachments(true);
-    api.getAttachments(user.id, activeChatUser.id)
-      .then(setSharedAttachments)
-      .catch(() => setSharedAttachments({ media: [], files: [], links: [] }))
-      .finally(() => setLoadingAttachments(false));
-  }, [user?.id, activeChatUser?.id, chatHistory.length]);
-
-  const fetchAISuggest = useCallback(async () => {
-    if (!user?.id || !activeChatUser?.id) return;
-    setAiLoading(true);
-    setAiAnalysis('');
-    setAiDraft('');
-    try {
-      const data = await api.getAISuggest(user.id, activeChatUser.id);
-      setAiAnalysis(data.analysis || '');
-      setAiDraft(data.draft || '');
-    } catch (err) {
-      setAiAnalysis('Ошибка: ' + (err?.message || 'Не удалось получить ответ от AI'));
-      setAiDraft('');
-    } finally {
-      setAiLoading(false);
-    }
-  }, [user?.id, activeChatUser?.id]);
-
-  useEffect(() => {
-    if (!user?.id || !activeChatUser?.id) {
-      setAiAnalysis('');
-      setAiDraft('');
-      lastAiTriggerRef.current = null;
-      return;
-    }
-    const last = chatHistory[chatHistory.length - 1];
-    if (!last || last.isMine) return;
-    if (lastAiTriggerRef.current === last.id) return;
-    lastAiTriggerRef.current = last.id;
-    fetchAISuggest();
-  }, [user?.id, activeChatUser?.id, chatHistory, fetchAISuggest]);
-
-  const handleApplyDraft = useCallback((draft) => {
-    if (draft) setInput(draft);
-  }, []);
-
-  const handleSendDraft = useCallback((draft) => {
-    if (!draft?.trim() || !onSend) return;
-    onSend(draft.trim());
-    setInput('');
-    setAiDraft('');
-    setAiAnalysis('');
-  }, [onSend]);
-
-  useEffect(() => {
-    if (!activeChatUser?.id) lastAiTriggerRef.current = null;
-  }, [activeChatUser?.id]);
-
-  useEffect(() => {
-    const h = (e) => { if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) setEmojiPickerOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  const handleFileSelect = useCallback((e) => {
-    const files = [...(e.target.files || [])];
-    const valid = files.filter((f) => f.size <= MAX_ATTACHMENT_SIZE);
-    if (files.length !== valid.length) setToast?.({ message: 'Файл до 10 МБ', type: 'error' });
-    if (valid.length === 0) return;
-    valid.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
-        setAttachments((prev) => [...prev, { type, url: reader.result, name: file.name, size: file.size }]);
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value = '';
-  }, [setToast]);
-
-  const removeAttachment = (i) => setAttachments((prev) => prev.filter((_, j) => j !== i));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if ((!input.trim() && attachments.length === 0) || !user || !activeChatUser) return;
-    const att = attachments.map((a) => ({ type: a.type, url: a.url, name: a.name, size: a.size }));
-    onSend(input.trim(), att);
-    setInput('');
-    setAttachments([]);
-  };
-
-  const isActive = (c) => activeChatUser?.id === (c?.contactId ?? c?.id);
-  const status = getChatUserStatus(activeChatUser);
-  return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] min-h-[400px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-      <div className="flex flex-1 min-h-0 relative">
-        {/* Sidebar - Glass panel */}
-        <div className="w-[30%] min-w-[220px] border-r border-white/5 bg-black/20 backdrop-blur-xl flex flex-col">
-          <div className="px-4 py-4 border-b border-white/5">
-            <h2 className="text-[11px] font-black text-white/90 uppercase tracking-[0.2em]">Мои чаты</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {!user ? (
-              <div className="p-6 text-center text-white/60 text-sm">Войдите для просмотра сообщений</div>
-            ) : loading && conversations.length === 0 ? (
-              <div className="p-6 text-white/60 text-sm">Загрузка...</div>
-            ) : conversations.length === 0 ? (
-              <div className="p-6 text-white/60 text-sm">Нет диалогов. Нажмите «Написать сообщение» в профиле пользователя.</div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {conversations.map((c) => {
-                  const isUserOnline = isOnline(c);
-                  return (
-                <button
-                  key={c.contactId}
-                  type="button"
-                  onClick={() => onSelectContact(c)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-300 ${isActive(c) ? 'bg-white/[0.04] border border-white/5 shadow-sm' : 'bg-transparent border border-transparent hover:bg-white/[0.04] hover:border-white/5'}`}
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/10">
-                      <AvatarWithFallback src={c.avatar} alt={c.username} fallbackLetter={c.username} className="w-full h-full object-cover" />
-                    </div>
-                    <span className={`w-3 h-3 rounded-full absolute bottom-0 right-0 border-2 border-[#0f0f13] ${isUserOnline ? 'bg-green-500' : 'bg-orange-500'}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-white text-sm truncate">{c.username}</div>
-                    <div className="text-[11px] text-white/50 truncate">{c.lastMessage || 'Нет сообщений'}</div>
-                  </div>
-                </button>
-              ); })}
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Chat area */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
-          {/* Subtle gradient glow background */}
-          <div className="absolute inset-0 bg-gradient-to-b from-purple-500/5 via-transparent to-blue-500/5 pointer-events-none" />
-          {activeChatUser ? (
-            <>
-              {/* Glass header */}
-              <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 backdrop-blur-md bg-black/20 sticky top-0 z-10 flex-shrink-0">
-                <div className="relative flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white/10 ring-offset-2 ring-offset-black/40 shadow-lg shadow-purple-500/10 shrink-0">
-                    <AvatarWithFallback src={getAvatarUrl(activeChatUser)} alt={activeChatUser.username} fallbackLetter={activeChatUser.username} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="min-w-0">
-                    <span className="font-bold text-white truncate block">{activeChatUser.username}</span>
-                    <span className={`text-[10px] flex items-center gap-1 ${status.isOnline ? 'text-emerald-400/90' : 'text-orange-400/90'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${status.isOnline ? 'bg-green-500 animate-pulse' : 'bg-orange-500'}`} />
-                      {status.label}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowAIPanel((v) => !v)}
-                    className={`p-2 rounded-lg transition-colors ${showAIPanel ? 'bg-white/10 text-[var(--color-accent)]' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
-                    title={showAIPanel ? 'Скрыть AI' : 'AI Ассистент'}
-                  >
-                    <Wand2 size={20} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowSidebar((v) => !v)}
-                    className={`p-2 rounded-lg transition-colors ${showSidebar ? 'bg-white/10 text-[var(--color-accent)]' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
-                    title={showSidebar ? 'Скрыть вложения' : 'Вложения'}
-                  >
-                    <PanelRight size={20} />
-                  </button>
-                </div>
-              </div>
-              {/* Messages area with depth */}
-              <div ref={historyRef} className="flex-1 overflow-y-auto flex flex-col relative overflow-x-hidden">
-                <div
-                  className={`sticky top-0 z-20 shrink-0 transition-all duration-300 transform overflow-hidden ${
-                    pinnedMessage ? 'translate-y-0 opacity-100 max-h-24' : '-translate-y-full opacity-0 max-h-0'
-                  }`}
-                >
-                {pinnedMessage && (
-                  <div className="bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 p-3 flex items-center gap-3">
-                    <div className="w-1 h-8 bg-[var(--color-accent)] rounded-full shrink-0" />
-                    <div
-                      className="flex-1 min-w-0 flex items-center justify-between gap-2 cursor-pointer"
-                      onClick={() => scrollToMessage(pinnedMessage.id)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-bold text-[var(--color-accent)] uppercase tracking-widest">Закреплённое сообщение</p>
-                        <p className="text-sm text-gray-300 line-clamp-1 truncate">{pinnedMessage.content || (pinnedMessage.attachments?.length ? '📎 Файл' : '')}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          handleUnpin();
-                        }}
-                        className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors shrink-0"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-                </div>
-                <div className="flex-1 p-4 space-y-4">
-                {loading && chatHistory.length === 0 ? (
-                  <div className="text-white/60 text-sm">Загрузка...</div>
-                ) : !loading && chatHistory.length === 0 ? (
-                  <div className="text-white/60 text-sm">Нет сообщений. Напишите первым!</div>
-                ) : (
-                  chatHistory.map((m) => (
-                    <div key={m.id} data-message-id={m.id} className={`flex ${m.isMine ? 'justify-end' : 'justify-start'} group/message`}>
-                      <div className={`max-w-[70%] px-4 py-2.5 text-sm rounded-2xl shadow-lg relative ${m.isMine ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-tr-sm shadow-purple-500/20' : 'bg-[#1a1a1a] border border-white/10 text-gray-200 rounded-tl-sm'}`}>
-                        {m.attachments?.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            {m.attachments.map((a, i) => (
-                              a.type === 'image' ? (
-                                <div key={i} className="rounded-lg overflow-hidden cursor-zoom-in" onClick={() => { const imgs = m.attachments.filter((x) => x.type === 'image').map((x) => x.url); const idx = m.attachments.slice(0, i).filter((x) => x.type === 'image').length; openLightbox?.(imgs, idx); }}>
-                                  <img src={a.url} alt="" className="max-w-[200px] max-h-[150px] object-cover rounded-lg" />
-                                </div>
-                              ) : a.type === 'video' ? (
-                                <video key={i} src={a.url} controls className="max-w-xs max-h-40 rounded-lg" />
-                              ) : (
-                                <a key={i} href={a.url} download={a.name} className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
-                                  <FileText size={16} />
-                                  <span className="truncate max-w-[120px]">{a.name}</span>
-                                  <Download size={14} />
-                                </a>
-                              )
-                            ))}
-                          </div>
-                        )}
-                        {m.content && <p className="break-words whitespace-pre-wrap"><ContentWithEmojis text={m.content} emojis={emojis} /></p>}
-                        <div className="flex items-center justify-between gap-2 mt-1">
-                          <span className={`text-[10px] ${m.isMine ? 'text-white/80' : 'text-white/50'}`}>{m.time}</span>
-                          <div className="flex items-center gap-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
-                            {(m.isMine || user?.is_admin) && onTogglePin && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  m.is_pinned ? handleUnpin() : handlePin(m);
-                                }}
-                                className={`p-1 rounded hover:bg-white/20 transition-colors ${m.is_pinned ? 'text-[var(--color-accent)]' : 'hover:text-[var(--color-accent)]'}`}
-                                title={m.is_pinned ? 'Открепить' : 'Закрепить'}
-                              >
-                                <Pin size={12} className={m.is_pinned ? 'fill-current' : ''} />
-                              </button>
-                            )}
-                            {(m.isMine || user?.is_admin) && onDeleteMessage && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm('Удалить сообщение?')) onDeleteMessage(m.id);
-                                }}
-                                className="p-1 rounded hover:bg-white/20 hover:text-red-500 transition-colors"
-                                title="Удалить сообщение"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-                </div>
-              </div>
-              {/* Floating glass input */}
-              {user ? (
-                <div className="m-4 flex-shrink-0">
-                  {attachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-2 p-2 rounded-xl bg-white/5 border border-white/5">
-                      {attachments.map((a, i) => (
-                        <div key={i} className="relative flex items-center gap-2">
-                          {a.type === 'image' ? (
-                            <div className="w-14 h-14 rounded-lg overflow-hidden">
-                              <img src={a.url} alt="" className="w-full h-full object-cover" />
-                            </div>
-                          ) : a.type === 'video' ? (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                              <Video size={16} className="text-[var(--color-accent)]" />
-                              <span className="text-xs truncate max-w-[100px]">{a.name}</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                              <FileText size={16} className="text-[var(--color-accent)]" />
-                              <span className="text-xs truncate max-w-[100px]">{a.name}</span>
-                            </div>
-                          )}
-                          <button type="button" onClick={() => removeAttachment(i)} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-400"><X size={12} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <form onSubmit={handleSubmit} className="p-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl flex items-center gap-2">
-                    <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.doc,.docx,.zip" multiple className="hidden" onChange={handleFileSelect} />
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all flex-shrink-0" title="Прикрепить файл"><Paperclip size={18} /></button>
-                    <div className="relative flex-shrink-0" ref={emojiPickerRef}>
-                      <button type="button" onClick={() => setEmojiPickerOpen((v) => !v)} className="p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all" title="Эмодзи"><Smile size={18} /></button>
-                      <UnifiedEmojiPicker emojis={emojis} open={emojiPickerOpen} onClose={() => setEmojiPickerOpen(false)} onSelect={(insert) => setInput((prev) => prev + insert)} />
-                    </div>
-                    <input value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 min-w-0 bg-transparent border-none px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-0" placeholder="Написать сообщение..." />
-                    <button
-                      type="submit"
-                      disabled={!input.trim() && attachments.length === 0}
-                      className={`
-                        relative group flex items-center justify-center
-                        p-3 sm:p-3.5 rounded-full text-white
-                        bg-gradient-to-br from-[var(--color-accent)] to-indigo-600
-                        shadow-lg shadow-[var(--color-accent)]/30
-                        hover:shadow-[var(--color-accent)]/50 hover:scale-105 hover:brightness-110
-                        active:scale-95
-                        disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed disabled:scale-100 disabled:brightness-100
-                        transition-all duration-300 ease-out flex-shrink-0
-                      `}
-                    >
-                      <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <SendHorizontal size={20} className="relative z-10 -rotate-12 group-hover:rotate-0 transition-transform duration-300" />
-                    </button>
-                  </form>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-8 relative">
-              <div className="text-center">
-                <MessageSquare size={48} className="mx-auto text-white/30 mb-4" />
-                <p className="text-white/50 text-sm">Выберите чат, чтобы начать переписку</p>
-              </div>
-            </div>
-          )}
-        </div>
-        {showSidebar && activeChatUser && (
-          <SharedContentSidebar
-            media={sharedAttachments.media}
-            files={sharedAttachments.files}
-            links={sharedAttachments.links}
-            activeTab={sidebarTab}
-            onTabChange={setSidebarTab}
-            searchQuery={sidebarSearch}
-            onSearchChange={setSidebarSearch}
-            onClose={() => setShowSidebar(false)}
-            scrollToMessage={scrollToMessage}
-          />
-        )}
-        {showAIPanel && user && (
-          <AIAssistantPanel
-            user={user}
-            activeChatUser={activeChatUser}
-            aiAnalysis={aiAnalysis}
-            aiDraft={aiDraft}
-            aiLoading={aiLoading}
-            onApplyDraft={handleApplyDraft}
-            onRegenerate={fetchAISuggest}
-            onSendDraft={handleSendDraft}
-            onClose={() => setShowAIPanel(false)}
-            onOpenProfile={onOpenProfile}
-            onOpenSettings={onOpenSettings}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AdminMessages({ setToast }) {
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [perPage] = useState(20);
-  const [loading, setLoading] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
-
-  const loadPosts = useCallback(() => {
-    setLoading(true);
-    api.getAdminPosts(page, perPage)
-      .then(({ items: list, total: t }) => {
-        setItems(list || []);
-        setTotal(t || 0);
-      })
-      .catch(() => setToast({ message: 'Ошибка загрузки постов', type: 'error' }))
-      .finally(() => setLoading(false));
-  }, [page, perPage, setToast]);
-
-  useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
-
-  const handleDelete = async (id) => {
-    setDeletingId(id);
-    try {
-      await api.deleteAdminPost(id);
-      setToast({ message: 'Пост удалён', type: 'success' });
-      loadPosts();
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка удаления', type: 'error' });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const totalPages = Math.ceil(total / perPage) || 1;
-
-  return (
-    <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-[#30363d]">
-        <h3 className="text-lg font-black text-white">Сообщения (посты)</h3>
-        <p className="text-[11px] text-[#8b949e] mt-1">Просмотр и модерация всех тем форума</p>
-      </div>
-      {loading ? (
-        <div className="p-8 text-center text-[#8b949e] text-sm">Загрузка...</div>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#30363d] text-left text-[#8b949e]">
-                  <th className="p-4 font-bold">ID</th>
-                  <th className="p-4 font-bold">Автор</th>
-                  <th className="p-4 font-bold">Тема</th>
-                  <th className="p-4 font-bold">Превью</th>
-                  <th className="p-4 font-bold">Дата</th>
-                  <th className="p-4 font-bold text-right">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((p) => (
-                  <tr key={p.id} className="border-b border-[#30363d] hover:bg-[#1c2128]">
-                    <td className="p-4 font-mono text-[#8b949e]">{p.id}</td>
-                    <td className="p-4 font-medium text-white">{p.author || '—'}</td>
-                    <td className="p-4 text-white max-w-[200px] truncate">{p.title || '—'}</td>
-                    <td className="p-4 text-[#8b949e] max-w-[240px] truncate">{p.content_preview || (p.content || '').substring(0, 80) + '…'}</td>
-                    <td className="p-4 text-[#8b949e]">{p.time || '—'}</td>
-                    <td className="p-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(p.id)}
-                        disabled={deletingId === p.id}
-                        className="p-1.5 text-red-400 hover:bg-red-500/10 rounded disabled:opacity-50"
-                        title="Удалить"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {items.length === 0 && (
-            <div className="p-8 text-center text-[#8b949e] text-sm">Нет постов</div>
-          )}
-          {totalPages > 1 && (
-            <div className="p-4 border-t border-[#30363d] flex items-center justify-between">
-              <span className="text-[#8b949e] text-sm">Всего: {total}</span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="px-3 py-1.5 bg-[var(--bg-main)] border border-[#30363d] rounded text-sm text-white disabled:opacity-50 hover:border-[var(--color-accent)]/50"
-                >
-                  ← Назад
-                </button>
-                <span className="px-3 py-1.5 text-[#8b949e] text-sm">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="px-3 py-1.5 bg-[var(--bg-main)] border border-[#30363d] rounded text-sm text-white disabled:opacity-50 hover:border-[var(--color-accent)]/50"
-                >
-                  Вперёд →
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function AdminEmojis({ emojis, loadEmojis, setToast }) {
-  const [emojiTab, setEmojiTab] = useState('unicode');
-  const [unicodeValue, setUnicodeValue] = useState('');
-  const [unicodeName, setUnicodeName] = useState('');
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [imageName, setImageName] = useState('');
-  const [imageCode, setImageCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const imageInputRef = useRef(null);
-
-  const handleAddUnicode = async (e) => {
-    e.preventDefault();
-    if (!unicodeValue.trim() || !unicodeName.trim()) {
-      setToast({ message: 'Введите эмодзи и название', type: 'error' });
-      return;
-    }
-    setLoading(true);
-    try {
-      await api.createEmoji({ type: 'unicode', value: unicodeValue.trim(), name: unicodeName.trim(), code: `:${unicodeName.trim().replace(/\s+/g, '_')}:` });
-      setToast({ message: 'Смайл добавлен', type: 'success' });
-      setUnicodeValue('');
-      setUnicodeName('');
-      loadEmojis?.();
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddImage = async (e) => {
-    e.preventDefault();
-    if (!imagePreview || !imageName.trim()) {
-      setToast({ message: 'Загрузите изображение и укажите код', type: 'error' });
-      return;
-    }
-    const code = imageCode.trim() || `:${imageName.trim().replace(/\s+/g, '_')}:`;
-    const finalCode = code.startsWith(':') ? code : `:${code}`;
-    const finalCode2 = finalCode.endsWith(':') ? finalCode : `${finalCode}:`;
-    setLoading(true);
-    try {
-      await api.createEmoji({ type: 'image', value: imagePreview, name: imageName.trim(), code: finalCode2 });
-      setToast({ message: 'Смайл добавлен', type: 'success' });
-      setImageFile(null);
-      setImagePreview(null);
-      setImageName('');
-      setImageCode('');
-      loadEmojis?.();
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteEmoji = async (id) => {
-    try {
-      await api.deleteEmoji(id);
-      setToast({ message: 'Смайл удалён', type: 'success' });
-      loadEmojis?.();
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка', type: 'error' });
-    }
-  };
-
-  const handleImageFileChange = (e) => {
-    const f = e.target.files?.[0];
-    if (!f || !f.type.startsWith('image/')) {
-      setToast({ message: 'Только изображения', type: 'error' });
-      return;
-    }
-    if (f.size > 2 * 1024 * 1024) {
-      setToast({ message: 'Файл до 2 МБ', type: 'error' });
-      return;
-    }
-    const r = new FileReader();
-    r.onload = () => { setImagePreview(r.result); setImageFile(f); };
-    r.readAsDataURL(f);
-    e.target.value = '';
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex gap-2 pb-4 border-b border-[#30363d]">
-        <button onClick={() => setEmojiTab('unicode')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${emojiTab === 'unicode' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>Unicode</button>
-        <button onClick={() => setEmojiTab('image')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${emojiTab === 'image' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>Изображение</button>
-      </div>
-      {emojiTab === 'unicode' && (
-        <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
-          <h3 className="text-lg font-black text-white mb-4">Добавить Unicode смайл</h3>
-          <form onSubmit={handleAddUnicode} className="space-y-4">
-            <div>
-              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Эмодзи (вставьте символ)</label>
-              <input value={unicodeValue} onChange={(e) => setUnicodeValue(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-3 text-2xl focus:outline-none focus:border-[var(--color-accent)]" placeholder="😀" />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Название (для кода :name:)</label>
-              <input value={unicodeName} onChange={(e) => setUnicodeName(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="smile" />
-            </div>
-            <button type="submit" disabled={loading} className="px-6 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">Добавить</button>
-          </form>
-        </div>
-      )}
-      {emojiTab === 'image' && (
-        <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
-          <h3 className="text-lg font-black text-white mb-4">Добавить кастомный смайл</h3>
-          <form onSubmit={handleAddImage} className="space-y-4">
-            <div>
-              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Изображение</label>
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={() => imageInputRef.current?.click()} className="px-4 py-2 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-[#8b949e] hover:text-white hover:border-[var(--color-accent)]/50 transition-colors">
-                  {imagePreview ? 'Изменить' : 'Загрузить'}
-                </button>
-                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
-                {imagePreview && <img src={imagePreview} alt="" className="w-12 h-12 rounded-lg object-cover border border-[#30363d]" />}
-              </div>
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Название</label>
-              <input value={imageName} onChange={(e) => setImageName(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="pepe_dance" />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Код (опционально, по умолчанию :name:)</label>
-              <input value={imageCode} onChange={(e) => setImageCode(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder=":pepe_dance:" />
-            </div>
-            <button type="submit" disabled={loading} className="px-6 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">Добавить</button>
-          </form>
-        </div>
-      )}
-      <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
-        <h3 className="text-lg font-black text-white mb-4">Все смайлы</h3>
-        {emojis.length === 0 ? (
-          <p className="text-[#8b949e] text-sm">Нет смайлов. Добавьте первый.</p>
-        ) : (
-          <div className="grid grid-cols-6 sm:grid-cols-10 gap-3">
-            {emojis.map((e) => (
-              <div key={e.id} className="p-2 bg-[var(--bg-main)] rounded-lg border border-[#30363d] flex flex-col items-center gap-1 relative group">
-                {e.type === 'unicode' ? (
-                  <span className="text-2xl">{e.value}</span>
-                ) : (
-                  <img src={e.value} alt="" className="w-8 h-8 object-contain" />
-                )}
-                <span className="text-[10px] text-[#8b949e] truncate max-w-full">{e.code}</span>
-                <button type="button" onClick={() => handleDeleteEmoji(e.id)} className="absolute top-1 right-1 p-1 text-red-400 hover:bg-red-500/10 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AdminPanel({ adminTab, setAdminTab, adminTrophies, setAdminTrophies, adminUsers, grantTrophyTarget, setGrantTrophyTarget, setToast, setView, getAvatarUrl, categories, loadCategories, refreshSiteSettings, onPreviewPattern, emojis, loadEmojis }) {
-  const [trophyName, setTrophyName] = useState('');
-  const [trophyDesc, setTrophyDesc] = useState('');
-  const [trophyImage, setTrophyImage] = useState(null);
-  const [trophyLoading, setTrophyLoading] = useState(false);
-  const [selectedTrophyId, setSelectedTrophyId] = useState(null);
-  const [assignLoading, setAssignLoading] = useState(false);
-  const [reputationPerThread, setReputationPerThread] = useState(5);
-  const [siteName, setSiteName] = useState('FORUM.LIVE');
-  const [siteLogo, setSiteLogo] = useState('');
-  const [siteLogoPreview, setSiteLogoPreview] = useState(null);
-  const [sitePattern, setSitePattern] = useState('');
-  const [sitePatternPreview, setSitePatternPreview] = useState(null);
-  const [bonusUsers, setBonusUsers] = useState(0);
-  const [bonusMessages, setBonusMessages] = useState(0);
-  const [realStats, setRealStats] = useState({ real_users: 0, real_messages: 0 });
-  const [themeSettings, setThemeSettings] = useState({ bg_main: '#0d1117', bg_block: '#161b22', text_primary: '#ffffff', color_accent: '#10b981', bg_widget: '#13131f', widget_opacity: 0.7, block_opacity: 0.8, bg_profile: '#1a0b2e', profile_opacity: 0.8 });
-  const [settingsLoading, setSettingsLoading] = useState(false);
-  const [settingsSaveLoading, setSettingsSaveLoading] = useState(false);
-  const [recalculateLoading, setRecalculateLoading] = useState(false);
-  const fileInputRef = useRef(null);
-  const siteLogoInputRef = useRef(null);
-  const sitePatternInputRef = useRef(null);
-  const [categoryModal, setCategoryModal] = useState(null);
-  const [categoryForm, setCategoryForm] = useState({ name: '', description: '', icon: 'Folder', color: '#10b981' });
-  const [categorySaveLoading, setCategorySaveLoading] = useState(false);
-  const [categoryDeleteConfirm, setCategoryDeleteConfirm] = useState(null);
-
-  useEffect(() => {
-    if (adminTab === 'categories') loadCategories?.();
-  }, [adminTab, loadCategories]);
-
-  useEffect(() => {
-    if (adminTab === 'settings') {
-      const hexToRgba = (hex, alpha) => {
-        const h = (hex || '#13131f').replace('#', '');
-        const r = parseInt(h.slice(0, 2), 16) || 19;
-        const g = parseInt(h.slice(2, 4), 16) || 19;
-        const b = parseInt(h.slice(4, 6), 16) || 31;
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      };
-      const widgetHex = toValidHex(themeSettings.bg_widget, '#13131f');
-      const widgetOpacity = themeSettings.widget_opacity ?? 0.7;
-      document.documentElement.style.setProperty('--bg-widget-glass', hexToRgba(widgetHex, widgetOpacity));
-      const blockHex = toValidHex(themeSettings.bg_block, '#161b22');
-      const blockOpacity = themeSettings.block_opacity ?? 0.8;
-      document.documentElement.style.setProperty('--bg-block-glass', hexToRgba(blockHex, blockOpacity));
-      const profileHex = toValidHex(themeSettings.bg_profile, '#1a0b2e');
-      const profileOpacity = themeSettings.profile_opacity ?? 0.8;
-      document.documentElement.style.setProperty('--bg-profile-glass', hexToRgba(profileHex, profileOpacity));
-    }
-  }, [adminTab, themeSettings.bg_widget, themeSettings.widget_opacity, themeSettings.bg_block, themeSettings.block_opacity, themeSettings.bg_profile, themeSettings.profile_opacity]);
-
-  useEffect(() => {
-    if (adminTab === 'settings') {
-      setSettingsLoading(true);
-      api.getAdminSettings()
-        .then((list) => {
-          const rep = list.find((x) => x.key === 'reputation_per_thread');
-          setReputationPerThread(rep ? parseInt(rep.value, 10) || 5 : 5);
-          const name = list.find((x) => x.key === 'site_name');
-          setSiteName(name?.value || 'FORUM.LIVE');
-          const logo = list.find((x) => x.key === 'site_logo');
-          const logoVal = logo?.value || '';
-          setSiteLogo(logoVal);
-          setSiteLogoPreview(logoVal || null);
-          const pattern = list.find((x) => x.key === 'site_pattern');
-          const patternVal = pattern?.value || '';
-          setSitePattern(patternVal);
-          setSitePatternPreview(patternVal || null);
-          const bonusU = list.find((x) => x.key === 'bonus_users');
-          setBonusUsers(bonusU ? parseInt(bonusU.value, 10) || 0 : 0);
-          const bonusM = list.find((x) => x.key === 'bonus_messages');
-          setBonusMessages(bonusM ? parseInt(bonusM.value, 10) || 0 : 0);
-          const themeRaw = list.find((x) => x.key === 'theme')?.value;
-          if (themeRaw) {
-            try {
-              const t = JSON.parse(themeRaw);
-              setThemeSettings({ bg_main: t.bg_main || '#0d1117', bg_block: t.bg_block || '#161b22', text_primary: t.text_primary || '#ffffff', color_accent: t.color_accent || '#10b981', bg_widget: t.bg_widget || '#13131f', widget_opacity: typeof t.widget_opacity === 'number' ? t.widget_opacity : 0.7, block_opacity: typeof t.block_opacity === 'number' ? t.block_opacity : 0.8, bg_profile: t.bg_profile || '#1a0b2e', profile_opacity: typeof t.profile_opacity === 'number' ? t.profile_opacity : 0.8 });
-            } catch { }
-          }
-        })
-        .catch(() => setToast({ message: 'Ошибка загрузки настроек', type: 'error' }))
-        .finally(() => setSettingsLoading(false));
-      api.getStats().then((s) => setRealStats({ real_users: s.real_users ?? s.users ?? 0, real_messages: s.real_messages ?? 0 }));
-    }
-  }, [adminTab, setToast]);
-
-  const toValidHex = (v, fallback) => {
-    const s = (v || '').trim().replace(/^#/, '');
-    if (/^[0-9a-fA-F]{6}$/.test(s)) return '#' + s;
-    if (/^[0-9a-fA-F]{3}$/.test(s)) return '#' + s.split('').map(c => c + c).join('');
-    return fallback;
-  };
-
-  const handleThemeHexChange = (key, raw) => {
-    const v = raw && !raw.startsWith('#') ? '#' + raw : (raw || '');
-    setThemeSettings(t => ({ ...t, [key]: v }));
-  };
-
-  const MAX_BRANDING_SIZE = 40 * 1024 * 1024; // 40MB
-  const handleSiteLogoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_BRANDING_SIZE) { setToast({ message: 'Файл слишком велик! Лимит до 40 МБ.', type: 'error' }); return; }
-    if (!file.type.startsWith('image/')) { setToast({ message: 'Только изображения', type: 'error' }); return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = reader.result;
-      setSiteLogo(data);
-      setSiteLogoPreview(data);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSitePatternChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_BRANDING_SIZE) { setToast({ message: 'Файл слишком велик! Лимит до 40 МБ.', type: 'error' }); return; }
-    if (!file.type.startsWith('image/')) { setToast({ message: 'Только изображения (PNG, JPG)', type: 'error' }); return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = reader.result;
-      setSitePattern(data);
-      setSitePatternPreview(data);
-      onPreviewPattern?.(data);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleRemovePattern = () => {
-    setSitePattern('');
-    setSitePatternPreview(null);
-    onPreviewPattern?.('');
-  };
-
-  const handleSaveSettings = async (e) => {
-    e.preventDefault();
-    const val = parseInt(reputationPerThread, 10);
-    if (isNaN(val) || val < 0) {
-      setToast({ message: 'Введите неотрицательное число', type: 'error' });
-      return;
-    }
-    setSettingsSaveLoading(true);
-    try {
-      const themeToSave = {
-        bg_main: toValidHex(themeSettings.bg_main, '#0d1117'),
-        bg_block: toValidHex(themeSettings.bg_block, '#161b22'),
-        text_primary: toValidHex(themeSettings.text_primary, '#ffffff'),
-        color_accent: toValidHex(themeSettings.color_accent, '#10b981'),
-        bg_widget: toValidHex(themeSettings.bg_widget, '#13131f'),
-        widget_opacity: Math.max(0, Math.min(1, Number(themeSettings.widget_opacity) || 0.7)),
-        block_opacity: Math.max(0, Math.min(1, Number(themeSettings.block_opacity) || 0.8)),
-        bg_profile: toValidHex(themeSettings.bg_profile, '#1a0b2e'),
-        profile_opacity: Math.max(0, Math.min(1, Number(themeSettings.profile_opacity) || 0.8)),
-      };
-      await api.updateAdminSettings({
-        site_name: siteName.trim() || 'FORUM.LIVE',
-        site_logo: siteLogo,
-        site_pattern: sitePattern,
-        bonus_users: bonusUsers,
-        bonus_messages: bonusMessages,
-        reputation_per_thread: val,
-        theme: themeToSave,
-      });
-      refreshSiteSettings?.();
-      setToast({ message: 'Настройки сохранены', type: 'success' });
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка сохранения', type: 'error' });
-    } finally {
-      setSettingsSaveLoading(false);
-    }
-  };
-
-  const handleRecalculateReputation = async () => {
-    setRecalculateLoading(true);
-    try {
-      const res = await api.recalculateReputation();
-      setToast({ message: 'Репутация пересчитана!', type: 'success' });
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка пересчёта', type: 'error' });
-    } finally {
-      setRecalculateLoading(false);
-    }
-  };
-
-  const handleTrophyFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setToast({ message: 'Файл до 2 МБ', type: 'error' }); return; }
-    if (!file.type.startsWith('image/')) { setToast({ message: 'Только изображения', type: 'error' }); return; }
-    const reader = new FileReader();
-    reader.onload = () => setTrophyImage(reader.result);
-    reader.readAsDataURL(file);
-  };
-
-  const handleCreateTrophy = async (e) => {
-    e.preventDefault();
-    if (!trophyName.trim()) return;
-    setTrophyLoading(true);
-    try {
-      const t = await api.createTrophy(trophyName.trim(), trophyDesc.trim(), trophyImage);
-      setAdminTrophies((prev) => [t, ...prev]);
-      setTrophyName('');
-      setTrophyDesc('');
-      setTrophyImage(null);
-      setToast({ message: 'Трофей создан', type: 'success' });
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка', type: 'error' });
-    } finally {
-      setTrophyLoading(false);
-    }
-  };
-
-  const handleDeleteTrophy = async (id) => {
-    try {
-      await api.deleteTrophy(id);
-      setAdminTrophies((prev) => prev.filter((t) => t.id !== id));
-      setToast({ message: 'Трофей удалён', type: 'success' });
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка', type: 'error' });
-    }
-  };
-
-  const handleAssignTrophy = async () => {
-    if (!grantTrophyTarget || !selectedTrophyId) return;
-    setAssignLoading(true);
-    try {
-      await api.assignTrophyToUser(grantTrophyTarget.id, selectedTrophyId);
-      setToast({ message: 'Трофей выдан', type: 'success' });
-      setGrantTrophyTarget(null);
-      setSelectedTrophyId(null);
-    } catch (err) {
-      setToast({ message: err?.message || 'Ошибка', type: 'error' });
-    } finally {
-      setAssignLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-[11px] text-[#484f58] font-bold uppercase tracking-wider">
-        <button onClick={() => setView('feed')} className="hover:text-[var(--color-accent)] transition-colors">ФОРУМ</button>
-        <ChevronRight size={12} />
-        <span className="text-amber-500">Админ-панель</span>
-      </div>
-      <div className="flex gap-2 pb-4 border-b border-[#30363d]">
-        <button onClick={() => setAdminTab('trophies')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'trophies' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
-          <Trophy size={14} className="inline mr-2" /> Трофеи
-        </button>
-        <button onClick={() => setAdminTab('settings')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'settings' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
-          <Settings size={14} className="inline mr-2" /> Настройки
-        </button>
-        <button onClick={() => setAdminTab('users')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'users' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
-          <Users size={14} className="inline mr-2" /> Пользователи
-        </button>
-        <button onClick={() => setAdminTab('categories')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'categories' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
-          <List size={14} className="inline mr-2" /> Категории
-        </button>
-        <button onClick={() => setAdminTab('messages')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'messages' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
-          <MessageSquare size={14} className="inline mr-2" /> Сообщения
-        </button>
-        <button onClick={() => setAdminTab('emojis')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'emojis' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-[#8b949e] hover:text-white'}`}>
-          <Smile size={14} className="inline mr-2" /> Смайлы
-        </button>
-      </div>
-
-      {adminTab === 'trophies' && (
-        <div className="space-y-6">
-          <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
-            <h3 className="text-lg font-black text-white mb-4 flex items-center gap-2"><Plus size={18} /> Добавить трофей</h3>
-            <form onSubmit={handleCreateTrophy} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Название</label>
-                <input value={trophyName} onChange={(e) => setTrophyName(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="Например: 3 года на форуме" required />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Описание</label>
-                <input value={trophyDesc} onChange={(e) => setTrophyDesc(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="Краткое описание" />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Изображение</label>
-                <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-[#8b949e] hover:text-white hover:border-[var(--color-accent)]/50 transition-colors">
-                    {trophyImage ? 'Изменить изображение' : 'Загрузить изображение'}
-                  </button>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleTrophyFileChange} className="hidden" />
-                  {trophyImage && <img src={trophyImage} alt="" className="w-12 h-12 rounded-lg object-cover border border-[#30363d]" />}
-                </div>
-              </div>
-              <button type="submit" disabled={trophyLoading} className="px-6 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">Создать трофей</button>
-            </form>
-          </div>
-          <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
-            <h3 className="text-lg font-black text-white mb-4">Список трофеев</h3>
-            {adminTrophies.length === 0 ? (
-              <p className="text-[#8b949e] text-sm">Нет трофеев. Добавьте первый.</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {adminTrophies.map((t) => (
-                  <div key={t.id} className="p-4 bg-[var(--bg-main)] rounded-xl border border-[#30363d] flex flex-col items-center gap-2">
-                    <div className="w-16 h-16 rounded-full overflow-hidden bg-[var(--bg-block)] border-2 border-[#30363d] flex items-center justify-center">
-                      {t.image_url ? <img src={t.image_url} alt="" className="w-full h-full object-cover" /> : <Trophy size={24} className="text-amber-400" />}
-                    </div>
-                    <div className="text-center">
-                      <div className="font-bold text-white text-sm truncate max-w-[120px]">{t.name}</div>
-                      {t.description && <div className="text-[10px] text-[#8b949e] truncate max-w-[120px]">{t.description}</div>}
-                    </div>
-                    <button type="button" onClick={() => handleDeleteTrophy(t.id)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded"><Trash2 size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {adminTab === 'settings' && (
-        <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6">
-          <h3 className="text-lg font-black text-white mb-4">Настройки форума</h3>
-          {settingsLoading ? (
-            <p className="text-[#8b949e] text-sm">Загрузка...</p>
-          ) : (
-            <form onSubmit={handleSaveSettings} className="space-y-4 max-w-md">
-              <div className="pb-4 mb-4 border-b border-[#30363d]">
-                <h4 className="text-sm font-black text-white mb-3">Общие настройки</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Название форума</label>
-                    <input
-                      type="text"
-                      value={siteName}
-                      onChange={(e) => setSiteName(e.target.value)}
-                      className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]"
-                      placeholder="FORUM.LIVE"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Логотип форума</label>
-                    <div className="flex items-center gap-3">
-                      <button type="button" onClick={() => siteLogoInputRef.current?.click()} className="px-4 py-2 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-[#8b949e] hover:text-white hover:border-[var(--color-accent)]/50 transition-colors">
-                        {siteLogoPreview ? 'Изменить логотип' : 'Загрузить логотип'}
-                      </button>
-                      <input ref={siteLogoInputRef} type="file" accept="image/*" onChange={handleSiteLogoChange} className="hidden" />
-                      {siteLogoPreview ? (
-                        <img src={siteLogoPreview} alt="" className="w-12 h-12 rounded-lg object-cover border border-[#30363d]" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-[var(--bg-main)] border border-[#30363d] flex items-center justify-center text-[#666] text-xs">Нет</div>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-[#8b949e] mt-1">Отображается в шапке сайта. До 40 МБ.</p>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Узор фона</label>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <button type="button" onClick={() => sitePatternInputRef.current?.click()} className="px-4 py-2 bg-[var(--bg-main)] border border-[#30363d] rounded-lg text-sm text-[#8b949e] hover:text-white hover:border-[var(--color-accent)]/50 transition-colors">
-                        {sitePatternPreview ? 'Изменить узор' : 'Загрузить узор'}
-                      </button>
-                      <input ref={sitePatternInputRef} type="file" accept="image/*" onChange={handleSitePatternChange} className="hidden" />
-                      {sitePatternPreview ? (
-                        <>
-                          <div className="w-16 h-16 rounded-lg border border-[#30363d] overflow-hidden bg-[var(--bg-main)]" style={{ backgroundImage: `url(${sitePatternPreview})`, backgroundRepeat: 'repeat', backgroundSize: '32px 32px' }} />
-                          <button type="button" onClick={handleRemovePattern} className="px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg text-sm font-medium transition-colors">Удалить узор</button>
-                        </>
-                      ) : (
-                        <div className="w-16 h-16 rounded-lg bg-[var(--bg-main)] border border-[#30363d] flex items-center justify-center text-[#666] text-xs">Нет</div>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-[#8b949e] mt-1">Плиточный узор поверх фона (сетка, точки, текстура). PNG до 40 МБ.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="pb-4 mb-4 border-b border-[#30363d]">
-                <h4 className="text-sm font-black text-white mb-3">Настройка показателей</h4>
-                <p className="text-[11px] text-[#8b949e] mb-3">Добавьте визуальный бонус к счётчикам. Реальные значения видны только вам.</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Добавить пользователей (визуально)</label>
-                    <div className="flex items-center gap-2">
-                      <input type="number" min="0" value={bonusUsers} onChange={(e) => setBonusUsers(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-24 bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[var(--color-accent)]" />
-                      <span className="text-[10px] text-[#666]">реально: {realStats.real_users}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Добавить сообщений (визуально)</label>
-                    <div className="flex items-center gap-2">
-                      <input type="number" min="0" value={bonusMessages} onChange={(e) => setBonusMessages(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-24 bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[var(--color-accent)]" />
-                      <span className="text-[10px] text-[#666]">реально: {realStats.real_messages}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="pb-4 mb-4 border-b border-[#30363d]">
-                <h4 className="text-sm font-black text-white mb-3 flex items-center gap-2"><Palette size={16} /> Визуальная тема</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Фон сайта</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={toValidHex(themeSettings.bg_main, '#0d1117')} onChange={(e) => setThemeSettings(t => ({ ...t, bg_main: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border border-[#30363d] bg-transparent" />
-                      <input type="text" value={themeSettings.bg_main} onChange={(e) => handleThemeHexChange('bg_main', e.target.value)} className="w-28 bg-[var(--bg-main)] border border-white/10 rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-[var(--color-accent)]" placeholder="#0d1117" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Фон блоков</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={toValidHex(themeSettings.bg_block, '#161b22')} onChange={(e) => setThemeSettings(t => ({ ...t, bg_block: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border border-[#30363d] bg-transparent" />
-                      <input type="text" value={themeSettings.bg_block} onChange={(e) => handleThemeHexChange('bg_block', e.target.value)} className="w-28 bg-[var(--bg-main)] border border-white/10 rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-[var(--color-accent)]" placeholder="#161b22" />
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Прозрачность блоков</label>
-                    <div className="flex items-center gap-3">
-                      <input type="range" min="0" max="1" step="0.05" value={themeSettings.block_opacity ?? 0.8} onChange={(e) => setThemeSettings(t => ({ ...t, block_opacity: parseFloat(e.target.value) }))} className="flex-1 h-2 bg-[var(--bg-main)] rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]" />
-                      <span className="text-sm font-mono text-white min-w-[3rem]">{Math.round((themeSettings.block_opacity ?? 0.8) * 100)}%</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Цвет текста</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={toValidHex(themeSettings.text_primary, '#ffffff')} onChange={(e) => setThemeSettings(t => ({ ...t, text_primary: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border border-[#30363d] bg-transparent" />
-                      <input type="text" value={themeSettings.text_primary} onChange={(e) => handleThemeHexChange('text_primary', e.target.value)} className="w-28 bg-[var(--bg-main)] border border-white/10 rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-[var(--color-accent)]" placeholder="#ffffff" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Акцентный цвет</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={toValidHex(themeSettings.color_accent, '#10b981')} onChange={(e) => setThemeSettings(t => ({ ...t, color_accent: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border border-[#30363d] bg-transparent" />
-                      <input type="text" value={themeSettings.color_accent} onChange={(e) => handleThemeHexChange('color_accent', e.target.value)} className="w-28 bg-[var(--bg-main)] border border-white/10 rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-[var(--color-accent)]" placeholder="#10b981" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Фон виджетов</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={toValidHex(themeSettings.bg_widget, '#13131f')} onChange={(e) => setThemeSettings(t => ({ ...t, bg_widget: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border border-[#30363d] bg-transparent" />
-                      <input type="text" value={themeSettings.bg_widget} onChange={(e) => handleThemeHexChange('bg_widget', e.target.value)} className="w-28 bg-[var(--bg-main)] border border-white/10 rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-[var(--color-accent)]" placeholder="#13131f" />
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Прозрачность виджетов</label>
-                    <div className="flex items-center gap-3">
-                      <input type="range" min="0" max="1" step="0.05" value={themeSettings.widget_opacity ?? 0.7} onChange={(e) => setThemeSettings(t => ({ ...t, widget_opacity: parseFloat(e.target.value) }))} className="flex-1 h-2 bg-[var(--bg-main)] rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]" />
-                      <span className="text-sm font-mono text-white min-w-[3rem]">{Math.round((themeSettings.widget_opacity ?? 0.7) * 100)}%</span>
-                    </div>
-                  </div>
-                  <div className="col-span-2 pt-2 border-t border-[#30363d]">
-                    <h5 className="text-[10px] font-black text-[var(--color-accent)] uppercase tracking-wider mb-3">Фон Профиля</h5>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Цвет фона</label>
-                    <div className="flex items-center gap-2">
-                      <input type="color" value={toValidHex(themeSettings.bg_profile, '#1a0b2e')} onChange={(e) => setThemeSettings(t => ({ ...t, bg_profile: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border border-[#30363d] bg-transparent" />
-                      <input type="text" value={themeSettings.bg_profile} onChange={(e) => handleThemeHexChange('bg_profile', e.target.value)} className="w-28 bg-[var(--bg-main)] border border-white/10 rounded-md px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-[var(--color-accent)]" placeholder="#1a0b2e" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Прозрачность профиля</label>
-                    <div className="flex items-center gap-3">
-                      <input type="range" min="0" max="1" step="0.05" value={themeSettings.profile_opacity ?? 0.8} onChange={(e) => setThemeSettings(t => ({ ...t, profile_opacity: parseFloat(e.target.value) }))} className="flex-1 h-2 bg-[var(--bg-main)] rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]" />
-                      <span className="text-sm font-mono text-white min-w-[3rem]">{Math.round((themeSettings.profile_opacity ?? 0.8) * 100)}%</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[11px] text-[#8b949e] mt-2">Обновит цвета сайта после сохранения. Можно вводить hex с # или без.</p>
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Репутация за создание темы</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={reputationPerThread}
-                  onChange={(e) => setReputationPerThread(e.target.value)}
-                  className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]"
-                  placeholder="5"
-                />
-                <p className="text-[11px] text-[#8b949e] mt-1">Количество очков репутации, начисляемых пользователю за создание новой темы</p>
-              </div>
-              <button type="submit" disabled={settingsSaveLoading} className="px-6 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">
-                {settingsSaveLoading ? 'Сохранение...' : 'Сохранить'}
-              </button>
-              <div className="pt-6 mt-6 border-t border-[#30363d]">
-                <button
-                  type="button"
-                  onClick={handleRecalculateReputation}
-                  disabled={recalculateLoading}
-                  className="px-6 py-2 border-2 border-amber-500/60 text-amber-400 rounded-lg font-bold text-sm hover:bg-amber-500/10 disabled:opacity-50 transition-colors"
-                >
-                  {recalculateLoading ? 'Пересчёт...' : 'Пересчитать репутацию всем пользователям'}
-                </button>
-                <p className="text-[11px] text-[#8b949e] mt-2">Обновит репутацию всех пользователей на основе тем, голосов и комментариев</p>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
-
-      {adminTab === 'users' && (
-        <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#30363d]">
-            <h3 className="text-lg font-black text-white">Пользователи</h3>
-          </div>
-          <div className="divide-y divide-[#30363d] max-h-[500px] overflow-y-auto">
-            {adminUsers.map((u) => (
-              <div key={u.id} className="p-4 flex items-center justify-between hover:bg-[#1c2128]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-[var(--bg-main)] border border-[#30363d]">
-                    <AvatarWithFallback src={getAvatarUrl(u)} alt="" fallbackLetter={u.username} className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-white">{u.username}</div>
-                    <div className="text-[10px] text-[#8b949e]">{u.rank || 'Юзер'}</div>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setGrantTrophyTarget(u)} className="px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-bold hover:bg-amber-500/30 transition-colors">
-                  <Trophy size={12} className="inline mr-1" /> Выдать трофей
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {adminTab === 'messages' && <AdminMessages setToast={setToast} />}
-
-      {adminTab === 'emojis' && <AdminEmojis emojis={emojis || []} loadEmojis={loadEmojis} setToast={setToast} />}
-
-      {adminTab === 'categories' && (
-        <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#30363d] flex items-center justify-between">
-            <h3 className="text-lg font-black text-white">Управление категориями</h3>
-            <button onClick={() => { setCategoryModal({ mode: 'create' }); setCategoryForm({ name: '', description: '', icon: 'Folder', color: '#10b981' }); }} className="px-4 py-2 bg-[var(--color-accent)] text-black rounded-lg text-xs font-bold hover:bg-[color:var(--color-accent)]/90 flex items-center gap-2">
-              <Plus size={14} /> Добавить
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#30363d] text-left text-[#8b949e]">
-                  <th className="p-4 font-bold">Название</th>
-                  <th className="p-4 font-bold">Описание</th>
-                  <th className="p-4 font-bold">Иконка</th>
-                  <th className="p-4 font-bold">Цвет</th>
-                  <th className="p-4 font-bold text-right">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(categories || []).map((c) => {
-                  const IconC = LUCIDE_ICONS[c.icon] || Folder;
-                  return (
-                    <tr key={c.id} className="border-b border-[#30363d] hover:bg-[#1c2128]">
-                      <td className="p-4 font-medium text-white">{c.name}</td>
-                      <td className="p-4 text-[#8b949e] max-w-[200px] truncate">{c.description || '—'}</td>
-                      <td className="p-4"><span style={{ color: c.color || '#10b981' }}><IconC size={18} /></span></td>
-                      <td className="p-4"><span className="inline-flex items-center gap-2"><span className="w-6 h-6 rounded border border-[#30363d]" style={{ backgroundColor: c.color || '#10b981' }} /> {c.color || '#10b981'}</span></td>
-                      <td className="p-4 text-right">
-                        <button onClick={() => { setCategoryModal({ mode: 'edit', category: c }); setCategoryForm({ name: c.name, description: c.description || '', icon: c.icon || 'Folder', color: c.color || '#10b981' }); }} className="p-1.5 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 rounded mr-1" title="Редактировать название"><Pencil size={14} /></button>
-                        <button onClick={() => { setCategoryModal({ mode: 'style', category: c }); setCategoryForm({ name: c.name, description: c.description || '', icon: c.icon || 'Folder', color: c.color || '#10b981' }); }} className="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded mr-1" title="Изменить стиль"><Palette size={14} /></button>
-                        {c.id !== 'messages' && c.id !== 'all' && (
-                          <button onClick={() => setCategoryDeleteConfirm(c)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded" title="Удалить"><Trash2 size={14} /></button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {(!categories || categories.length === 0) && (
-            <div className="p-8 text-center text-[#8b949e] text-sm">Нет категорий. Добавьте первую.</div>
-          )}
-        </div>
-      )}
-
-      {categoryModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80" onClick={() => { setCategoryModal(null); setCategoryForm({ name: '', description: '', icon: 'Folder', color: '#10b981' }); }} />
-          <div className="relative bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-black text-white mb-4">{categoryModal.mode === 'create' ? 'Новая категория' : categoryModal.mode === 'style' ? 'Изменить стиль' : 'Редактировать категорию'}</h3>
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setCategorySaveLoading(true);
-              try {
-                if (categoryModal.mode === 'create') {
-                  await api.createCategory(categoryForm);
-                  setToast({ message: 'Категория создана', type: 'success' });
-                } else {
-                  await api.updateCategory(categoryModal.category.id, categoryForm);
-                  setToast({ message: 'Категория обновлена', type: 'success' });
-                }
-                loadCategories?.();
-                setCategoryModal(null);
-              } catch (err) {
-                setToast({ message: err?.message || 'Ошибка', type: 'error' });
-              } finally {
-                setCategorySaveLoading(false);
-              }
-            }} className="space-y-4">
-              {(categoryModal.mode === 'create' || categoryModal.mode === 'edit') && (
-                <>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Название</label>
-                    <input value={categoryForm.name} onChange={(e) => setCategoryForm(f => ({ ...f, name: e.target.value }))} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="Название категории" required />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Описание</label>
-                    <input value={categoryForm.description} onChange={(e) => setCategoryForm(f => ({ ...f, description: e.target.value }))} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="Краткое описание" />
-                  </div>
-                </>
-              )}
-              {(categoryModal.mode === 'create' || categoryModal.mode === 'style') && (
-                <>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Иконка (Lucide)</label>
-                    <select value={categoryForm.icon} onChange={(e) => setCategoryForm(f => ({ ...f, icon: e.target.value }))} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)]">
-                      {Object.keys(LUCIDE_ICONS).map(ic => <option key={ic} value={ic}>{ic}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-[#8b949e] uppercase block mb-2">Цвет</label>
-                    <div className="flex items-center gap-3">
-                      <input type="color" value={categoryForm.color} onChange={(e) => setCategoryForm(f => ({ ...f, color: e.target.value }))} className="w-12 h-10 rounded border border-[#30363d] cursor-pointer bg-transparent" />
-                      <input value={categoryForm.color} onChange={(e) => setCategoryForm(f => ({ ...f, color: e.target.value }))} className="flex-1 bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[var(--color-accent)] font-mono text-sm" />
-                    </div>
-                  </div>
-                </>
-              )}
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setCategoryModal(null)} className="px-4 py-2 text-[#8b949e] hover:text-white transition-colors">Отмена</button>
-                <button type="submit" disabled={categorySaveLoading} className="px-6 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold text-sm hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">{categorySaveLoading ? 'Сохранение...' : 'Сохранить'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {categoryDeleteConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80" onClick={() => setCategoryDeleteConfirm(null)} />
-          <div className="relative bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-black text-white mb-2">Удалить категорию?</h3>
-            <p className="text-[#8b949e] text-sm mb-4">Категория «{categoryDeleteConfirm.name}» будет удалена. Это действие нельзя отменить. Удаление невозможно, если в категории есть темы.</p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setCategoryDeleteConfirm(null)} className="px-4 py-2 text-[#8b949e] hover:text-white transition-colors">Отмена</button>
-              <button onClick={async () => {
-                try {
-                  await api.deleteCategory(categoryDeleteConfirm.id);
-                  setToast({ message: 'Категория удалена', type: 'success' });
-                  loadCategories?.();
-                  setCategoryDeleteConfirm(null);
-                } catch (err) {
-                  setToast({ message: err?.message || 'Ошибка', type: 'error' });
-                }
-              }} className="px-4 py-2 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-400">Удалить</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {grantTrophyTarget && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80" onClick={() => { setGrantTrophyTarget(null); setSelectedTrophyId(null); }} />
-          <div className="relative bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-black text-white mb-4">Выдать трофей пользователю {grantTrophyTarget.username}</h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
-              {adminTrophies.length === 0 ? <p className="text-[#8b949e] text-sm">Нет трофеев</p> : adminTrophies.map((t) => (
-                <button key={t.id} type="button" onClick={() => setSelectedTrophyId(t.id)} className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${selectedTrophyId === t.id ? 'bg-amber-500/20 border-amber-500/50' : 'bg-[var(--bg-main)] border-[#30363d] hover:border-[#484f58]'}`}>
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-[var(--bg-block)] flex items-center justify-center flex-shrink-0">
-                    {t.image_url ? <img src={t.image_url} alt="" className="w-full h-full object-cover" /> : <Trophy size={18} className="text-amber-400" />}
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium text-white">{t.name}</div>
-                    {t.description && <div className="text-[10px] text-[#8b949e]">{t.description}</div>}
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => { setGrantTrophyTarget(null); setSelectedTrophyId(null); }} className="flex-1 py-2 border border-[#30363d] rounded-lg text-[#8b949e] hover:text-white">Отмена</button>
-              <button type="button" onClick={handleAssignTrophy} disabled={!selectedTrophyId || assignLoading} className="flex-1 py-2 bg-[var(--color-accent)] text-black rounded-lg font-bold hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">Выдать</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProfileEditModal({ user, onClose, onSave }) {
-  const [username, setUsername] = useState(user?.username || '');
-  const [gender, setGender] = useState(user?.gender || '');
-  const [occupation, setOccupation] = useState(user?.occupation || '');
-  const [interests, setInterests] = useState(user?.interests || '');
-  const [avatarPreview, setAvatarPreview] = useState(user?.custom_avatar || null);
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarRemoved, setAvatarRemoved] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const fileInputRef = useRef(null);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      setError('Файл не более 20 МБ');
-      return;
-    }
-    if (!file.type.startsWith('image/')) {
-      setError('Только изображения (JPG, PNG, GIF)');
-      return;
-    }
-    setError('');
-    setAvatarFile(file);
-    setAvatarRemoved(false);
-    const reader = new FileReader();
-    reader.onload = () => setAvatarPreview(reader.result);
-    reader.readAsDataURL(file);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const data = {};
-      const trimmed = username.trim();
-      if (trimmed && trimmed !== user?.username) data.username = trimmed;
-      if (gender !== (user?.gender || '')) data.gender = gender;
-      if (occupation !== (user?.occupation || '')) data.occupation = occupation;
-      if (interests !== (user?.interests || '')) data.interests = interests;
-      if (avatarFile) {
-        const base64 = await new Promise((resolve) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result);
-          r.readAsDataURL(avatarFile);
-        });
-        data.avatar = base64;
-      } else if (avatarRemoved && user?.custom_avatar) data.avatar = null;
-      if (Object.keys(data).length > 0) {
-        await api.updateProfile(data);
-        onSave?.();
-      }
-      onClose();
-    } catch (err) {
-      setError(err?.message || 'Ошибка');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--bg-block)] border border-[#30363d] w-full max-w-md rounded-2xl p-8 shadow-2xl">
-        <button onClick={onClose} className="absolute top-4 right-4 text-[#484f58] hover:text-white"><X size={20} /></button>
-        <h2 className="text-xl font-black text-white mb-6">Редактирование профиля</h2>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && <div className="text-red-400 text-sm">{error}</div>}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative group">
-              <div className="w-28 h-28 rounded-2xl bg-[var(--bg-main)] border-2 border-[#30363d] overflow-hidden">
-                <AvatarWithFallback src={avatarPreview || getAvatarUrl(avatarRemoved ? { ...user, custom_avatar: null } : user)} alt="" fallbackLetter={user?.username} className="w-full h-full object-cover" />
-              </div>
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
-                <ImagePlus size={32} className="text-white" />
-              </button>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-            </div>
-            <span className="text-[10px] text-[#8b949e]">Нажмите на аватар для загрузки (до 20 МБ)</span>
-            {(avatarPreview || user?.custom_avatar) && !avatarRemoved && (
-              <button type="button" onClick={() => { setAvatarPreview(null); setAvatarFile(null); setAvatarRemoved(true); }} className="text-[10px] text-red-400 hover:text-red-300">Сбросить аватар</button>
-            )}
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-[#484f58] uppercase tracking-wider block mb-2">Никнейм</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} minLength={2} maxLength={30} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="Ваш никнейм" />
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-[#484f58] uppercase tracking-wider block mb-2">Пол</label>
-            <select value={gender} onChange={(e) => setGender(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--color-accent)]">
-              <option value="">Не указан</option>
-              <option value="Мужской">Мужской</option>
-              <option value="Женский">Женский</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-[#484f58] uppercase tracking-wider block mb-2">Род занятий</label>
-            <input value={occupation} onChange={(e) => setOccupation(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="Род занятий" />
-          </div>
-          <div>
-            <label className="text-[10px] font-black text-[#484f58] uppercase tracking-wider block mb-2">Интересы</label>
-            <input value={interests} onChange={(e) => setInterests(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--color-accent)]" placeholder="Интересы" />
-          </div>
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-3 border border-[#30363d] rounded-lg text-[#8b949e] font-bold hover:text-white transition-colors">Отмена</button>
-            <button type="submit" disabled={loading} className="flex-1 py-3 bg-[var(--color-accent)] text-black rounded-lg font-black hover:bg-[color:var(--color-accent)]/90 disabled:opacity-50">Сохранить</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function ImageViewer({ images, initialIndex, onClose }) {
-  const [index, setIndex] = useState(initialIndex ?? 0);
-
-  useEffect(() => setIndex(initialIndex ?? 0), [initialIndex]);
-
-  const next = useCallback((e) => { e?.stopPropagation(); setIndex((i) => (i + 1) % images.length); }, [images.length]);
-  const prev = useCallback((e) => { e?.stopPropagation(); setIndex((i) => (i - 1 + images.length) % images.length); }, [images.length]);
-
-  useEffect(() => {
-    const handleKey = (e) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [next, prev, onClose]);
-
-  if (!images?.length) return null;
-  const currentSrc = images[index];
-
-  return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md transition-opacity duration-200" onClick={onClose}>
-      <button type="button" onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50">
-        <X size={24} />
-      </button>
-      <a href={currentSrc} download target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="absolute top-4 right-16 p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50" title="Скачать">
-        <Download size={24} />
-      </a>
-      {images.length > 1 && (
-        <>
-          <button type="button" onClick={prev} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50">
-            <ChevronLeft size={32} />
-          </button>
-          <button type="button" onClick={next} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-white/20 rounded-full text-white transition-all z-50">
-            <ChevronRight size={32} />
-          </button>
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1 bg-black/50 rounded-full text-white/80 text-sm font-medium backdrop-blur-sm">
-            {index + 1} / {images.length}
-          </div>
-        </>
-      )}
-      <img key={currentSrc} src={currentSrc} alt="Full view" className="max-w-[95vw] max-h-[95vh] object-contain shadow-2xl" onClick={(e) => e.stopPropagation()} />
-    </div>
-  );
-}
-
-function Toast({ message, type, onClose }) {
-  useEffect(() => {
-    const t = setTimeout(() => onClose(), 3500);
-    return () => clearTimeout(t);
-  }, [message, type]);
-  return (
-    <div className={`fixed bottom-4 right-4 z-[200] px-4 py-3 rounded-lg shadow-xl border ${
-      type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30 text-[var(--color-accent)]'
-    }`}>
-      {message}
-    </div>
-  );
-}
+import { theme, DEFAULT_CATEGORIES, TOP_NAV, DIRECT_POST_CATEGORIES } from './constants/theme';
+import { LUCIDE_ICONS, getIconComponent } from './constants/icons';
+import { getRankColor, getAvatarGlowStyles } from './constants/ranks';
+import { getAvatarUrl, isOnline, isPlaceholderUrl, getWallAvatarUrl, isAdmin } from './utils/user';
+
+import { AvatarWithFallback } from './components/ui/AvatarWithFallback';
+import { UserLink, UserBanner } from './components/ui/UserLink';
+import { PlusIcon } from './components/ui/PlusIcon';
+import { PostSkeleton } from './components/ui/PostSkeleton';
+import { RankBadge } from './components/ui/RankBadge';
+import { ImageViewer } from './components/ui/ImageViewer';
+import { Toast } from './components/ui/Toast';
+
+import { ProfileBanner } from './components/forum/ProfileBanner';
+import { TrophyCarousel } from './components/forum/TrophyCarousel';
+import { ThreadActions } from './components/forum/ThreadActions';
+import { SimpleMarkdown } from './components/forum/SimpleMarkdown';
+import { PostCard } from './components/forum/PostCard';
+import { ContentWithEmojis } from './components/forum/ContentWithEmojis';
+import { UnifiedEmojiPicker } from './components/forum/UnifiedEmojiPicker';
+
+import { MessagesPage } from './components/messaging/MessagesPage';
+import { SettingsPage } from './components/settings/SettingsPage';
+import { AdminPanel } from './components/admin/AdminPanel';
+import { ArticlesPage } from './pages/ArticlesPage';
+import { ProfileEditModal } from './components/profile/ProfileEditModal';
 
 export default function App() {
   const [view, setView] = useState('feed');
@@ -2715,6 +48,8 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [posts, setPosts] = useState([]);
+  const [articles, setArticles] = useState([]);
+  const [articlesLoading, setArticlesLoading] = useState(false);
   const [comments, setComments] = useState([]);
   const [stats, setStats] = useState({ posts: 0, users: 0, display_users: 0, display_messages: 0 });
   const [latestComments, setLatestComments] = useState([]);
@@ -2793,6 +128,98 @@ export default function App() {
   const [siteSettings, setSiteSettings] = useState({ site_name: 'FORUM.LIVE', site_logo: '', site_pattern: '', theme: null });
   const [emojis, setEmojis] = useState([]);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { threadId: routeThreadId, userId: routeUserId, categoryId: routeCategoryId } = useParams();
+
+  // The URL is the source of truth for navigation: clicking things updates
+  // both state and the URL (see navigate() calls below), and this effect
+  // handles the reverse direction — direct links, refresh, and back/forward
+  // — by deriving view state from the current route and fetching whatever
+  // that route needs that isn't already loaded.
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/' || path.startsWith('/category/')) {
+      setActiveNav('forum');
+      setView('feed');
+      setActiveTab(routeCategoryId || 'all');
+    } else if (/^\/thread\/[^/]+\/edit$/.test(path)) {
+      setActiveNav('forum');
+      if (String(selectedThread?.id) !== String(routeThreadId)) {
+        api.getPost(routeThreadId, true).then((full) => {
+          setSelectedThread(full);
+          setEditingThreadId(full.id);
+          setView('editor');
+        }).catch(() => navigate('/', { replace: true }));
+      } else {
+        setEditingThreadId(selectedThread.id);
+        setView('editor');
+      }
+    } else if (path.startsWith('/thread/')) {
+      setActiveNav('forum');
+      if (String(selectedThread?.id) !== String(routeThreadId)) {
+        setLoading(true);
+        api.getPost(routeThreadId).then((full) => {
+          setSelectedThread(full);
+          setView('thread');
+        }).catch(() => {
+          setSelectedThread(null);
+          navigate('/', { replace: true });
+        }).finally(() => setLoading(false));
+      } else {
+        setView('thread');
+      }
+    } else if (path === '/new') {
+      setActiveNav('forum');
+      setEditingThreadId(null);
+      setView('editor');
+    } else if (path === '/profile') {
+      setActiveNav('forum');
+      setSelectedUser(null);
+      setView('profile');
+    } else if (path.startsWith('/u/')) {
+      setActiveNav('forum');
+      if (String(selectedUser?.id) !== String(routeUserId)) {
+        api.getUserProfile(routeUserId).then((p) => {
+          setSelectedUser(p);
+          setView('profile');
+        }).catch(() => {
+          setSelectedUser(null);
+          navigate('/', { replace: true });
+        });
+      } else {
+        setView('profile');
+      }
+    } else if (path.startsWith('/messages')) {
+      setActiveNav('forum');
+      setView('messages');
+      if (routeUserId && String(activeChatUser?.id) !== String(routeUserId)) {
+        api.getUserProfile(routeUserId).then((p) => {
+          setActiveChatUser({ id: p.id, username: p.nickname || p.username, custom_avatar: p.custom_avatar, last_online: p.last_online });
+          setChatHistory([]);
+        }).catch(() => {});
+      } else if (!routeUserId) {
+        setActiveChatUser(null);
+      }
+    } else if (path === '/settings') {
+      setActiveNav('forum');
+      setView('settings');
+    } else if (path === '/admin') {
+      setActiveNav('forum');
+      setView('admin');
+    } else if (path === '/articles') {
+      setActiveNav('articles');
+      setView('feed');
+    } else if (path === '/rules') {
+      setActiveNav('rules');
+      setView('feed');
+    }
+    // Deliberately reacting only to the URL (and the route params it carries) —
+    // the id-comparison guards above read other state without needing it in
+    // the dependency array, matching "only re-derive when the route changes".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, routeThreadId, routeUserId, routeCategoryId, navigate]);
+
   const loadEmojis = useCallback(async () => {
     try {
       const list = await api.getEmojis();
@@ -2826,7 +253,7 @@ export default function App() {
     try {
       const data = await api.getPosts(activeTab, activeFilter);
       setPosts(data);
-    } catch (e) {
+    } catch {
       setPosts([]);
     } finally {
       setLoading(false);
@@ -2850,6 +277,13 @@ export default function App() {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    api.onUnauthorized(() => {
+      setUser(null);
+      setToast({ message: 'Сессия истекла. Пожалуйста, войдите снова.', type: 'error' });
+    });
+  }, []);
 
   useEffect(() => {
     if (view === 'editor') {
@@ -2913,6 +347,15 @@ export default function App() {
   useEffect(() => {
     if (activeNav === 'forum' && view === 'feed') loadPosts();
   }, [activeNav, view, activeTab, activeFilter, loadPosts]);
+
+  useEffect(() => {
+    if (activeNav !== 'articles') return;
+    setArticlesLoading(true);
+    api.getPosts('Articles', 'new')
+      .then(setArticles)
+      .catch(() => setArticles([]))
+      .finally(() => setArticlesLoading(false));
+  }, [activeNav]);
 
   useEffect(() => {
     loadStats();
@@ -2985,13 +428,15 @@ export default function App() {
     const u = targetUser?.id ? { ...targetUser } : { id: targetUser?.contactId, username: targetUser?.username || 'user', custom_avatar: targetUser?.avatar, last_online: targetUser?.last_online };
     if (activeChatUser?.id === u?.id) {
       setView('messages');
+      navigate(`/messages/${u.id}`);
       return;
     }
     setChatLoading(true);
     setActiveChatUser(u);
     setChatHistory([]);
     setView('messages');
-  }, [activeChatUser?.id]);
+    navigate(`/messages/${u.id}`);
+  }, [activeChatUser?.id, navigate]);
 
   const openChatWithUser = useCallback((contact) => {
     const contactId = contact?.contactId ?? contact?.id;
@@ -3074,7 +519,7 @@ export default function App() {
   }, [view, selectedUser?.id, selectedUser?.followers_count, selectedUser?.is_following]);
 
   useEffect(() => {
-    if (view === 'admin' && (user?.is_admin || user?.id === 1 || user?.username === 'admin_dev')) {
+    if (view === 'admin' && isAdmin(user)) {
       api.getTrophies().then(setAdminTrophies).catch(() => setAdminTrophies([]));
       api.getAdminUsers().then(setAdminUsers).catch(() => setAdminUsers([]));
     }
@@ -3103,6 +548,7 @@ export default function App() {
     if (userId === user?.id) {
       setSelectedUser(null);
       setView('profile');
+      navigate('/profile');
       return;
     }
     setLoading(true);
@@ -3110,6 +556,7 @@ export default function App() {
       const profileUser = await api.getUserProfile(userId);
       setSelectedUser(profileUser);
       setView('profile');
+      navigate(`/u/${userId}`);
       window.scrollTo(0, 0);
     } catch {
       setSelectedUser(null);
@@ -3117,7 +564,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -3139,8 +586,8 @@ export default function App() {
         setAuthLoading(false);
         return;
       }
-      if (passVal.length < 4) {
-        setAuthError('Пароль минимум 4 символа');
+      if (passVal.length < 8) {
+        setAuthError('Пароль минимум 8 символов');
         setAuthLoading(false);
         return;
       }
@@ -3182,6 +629,7 @@ export default function App() {
       if (!skipView && typeof sessionStorage !== 'undefined') sessionStorage.setItem(viewedKey, '1');
       setSelectedThread(full);
       setView('thread');
+      navigate(`/thread/${post.id}`);
       window.scrollTo(0, 0);
     } catch {
       setSelectedThread(null);
@@ -3200,11 +648,6 @@ export default function App() {
   const getCategoryStyle = (id) => {
     const cat = displayCategories.find(c => c.id === id);
     return { icon: cat?.icon || 'Folder', color: cat?.color || '#10b981' };
-  };
-
-  const getTabForCategory = (category) => {
-    const map = { Backend: 'dev', Frontend: 'dev', Languages: 'dev', Security: 'sec', DevOps: 'sys', Career: 'career' };
-    return map[category] || 'all';
   };
 
   const handlePublish = async (e) => {
@@ -3226,15 +669,17 @@ export default function App() {
       if (isEdit) {
         await api.updatePost(editingThreadId, { title, content, category, tags, images: newPostImages, cover_image: newPostCoverImage, attachments: newPostAttachments });
         setView('thread');
-        setEditingThreadId(null);
         const updated = await api.getPost(editingThreadId);
         setSelectedThread(updated);
+        navigate(`/thread/${editingThreadId}`);
+        setEditingThreadId(null);
         loadPosts();
         loadStats();
         setToast({ message: 'Изменения сохранены!', type: 'success' });
       } else {
         await api.createPost(title, content, category, tags, newPostImages, newPostCoverImage, newPostAttachments);
         setView('feed');
+        navigate('/');
         loadPosts();
         loadStats();
         setToast({ message: 'Тема опубликована!', type: 'success' });
@@ -3513,7 +958,7 @@ export default function App() {
             {TOP_NAV.map(item => (
               <button
                 key={item.id}
-                onClick={() => { setActiveNav(item.id); setView('feed'); }}
+                onClick={() => navigate(item.id === 'forum' ? '/' : `/${item.id}`)}
                 className={`transition-colors h-full px-1 border-b-2 ${activeNav === item.id ? 'text-white border-[var(--color-accent)]' : 'border-transparent hover:text-white'}`}
               >
                 <span className={item.color || ''}>{item.name}</span>
@@ -3530,7 +975,7 @@ export default function App() {
 
       <header className="sticky top-0 z-50 bg-[var(--bg-main)]/90 backdrop-blur-md border-b border-[#30363d] py-5">
         <div className="max-w-[1400px] mx-auto px-6 md:px-8 flex items-center gap-6">
-          <div className="flex items-center gap-4 cursor-pointer group" onClick={() => { setView('feed'); setActiveTab('all'); setActiveNav('forum'); }}>
+          <div className="flex items-center gap-4 cursor-pointer group" onClick={() => navigate('/')}>
             {siteSettings.site_logo ? (
               <img src={siteSettings.site_logo} alt="" className="w-11 h-11 rounded-lg object-cover shadow-lg shadow-[var(--color-accent)]/20 group-hover:rotate-3 transition-transform" />
             ) : (
@@ -3571,12 +1016,12 @@ export default function App() {
               </div>
             ) : (
               <div className="flex items-center gap-5">
-                {(user?.is_admin || user?.id === 1 || user?.username === 'admin_dev') && (
-                  <button onClick={() => setView('admin')} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 text-xs font-bold uppercase transition-colors">
+                {isAdmin(user) && (
+                  <button onClick={() => navigate('/admin')} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 text-xs font-bold uppercase transition-colors">
                     <Shield size={14} /> Админ
                   </button>
                 )}
-                <div onClick={() => { setSelectedUser(null); setView('profile'); }} className="flex items-center gap-3 cursor-pointer group">
+                <div onClick={() => navigate('/profile')} className="flex items-center gap-3 cursor-pointer group">
                   <div className="text-right hidden sm:block">
                     <p className="text-xs font-bold text-white group-hover:text-[var(--color-accent)]">{user.username}</p>
                     <p className={`text-[9px] font-black uppercase tracking-tighter ${user.rank_color || getRankColor(user.rank)}`}>{user.rank || 'Юзер'}</p>
@@ -3594,14 +1039,14 @@ export default function App() {
       <main className={`max-w-[1400px] mx-auto px-6 md:px-8 py-6 grid grid-cols-1 gap-6 ${view === 'profile' || view === 'admin' || view === 'messages' || view === 'settings' ? 'lg:grid-cols-1' : 'lg:grid-cols-[250px_1fr_300px]'}`}>
         <aside className={`hidden space-y-6 ${view === 'profile' || view === 'admin' || view === 'messages' || view === 'settings' ? 'lg:hidden' : 'lg:block'}`}>
           <button
-            onClick={() => { if (user) { setEditingThreadId(null); setView('editor'); } else { setShowAuth(true); setAuthMode('login'); } }}
+            onClick={() => { if (user) navigate('/new'); else { setShowAuth(true); setAuthMode('login'); } }}
             className="w-full bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 text-[var(--color-accent)] py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[var(--color-accent)] hover:text-black transition-all group"
           >
             <MessageSquarePlus size={18} /> СОЗДАТЬ ТЕМУ
           </button>
 
           <button
-            onClick={() => { setView('messages'); setActiveChatUser(null); setChatHistory([]); }}
+            onClick={() => navigate('/messages')}
             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all ${view === 'messages' ? 'bg-[#1c2128]' : 'text-[#8b949e] hover:bg-[var(--bg-block)] hover:text-white'}`}
             style={view === 'messages' ? { color: messagesConfig.color || 'var(--color-accent)' } : {}}
           >
@@ -3618,7 +1063,7 @@ export default function App() {
               return (
                 <button
                   key={cat.id}
-                  onClick={() => { setActiveTab(cat.id); setView('feed'); setActiveNav('forum'); }}
+                  onClick={() => navigate(cat.id === 'all' ? '/' : `/category/${cat.id}`)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all ${isActive ? 'bg-[#1c2128]' : 'text-[#8b949e] hover:bg-[var(--bg-block)] hover:text-white'}`}
                 >
                   <span style={isActive ? { color } : {}}><IconComp size={16} /></span>
@@ -3634,7 +1079,7 @@ export default function App() {
               <span className="text-[11px] font-black uppercase">Топ авторов</span>
             </div>
             <div className="space-y-3">
-              {posts.slice(0, 3).map((p, i) => (
+              {posts.slice(0, 3).map((p) => (
                 <button key={p.id} type="button" onClick={() => p.author_id && openUserProfile(p.author_id)} className="w-full flex items-center gap-2 text-left hover:text-[var(--color-accent)] transition-colors group">
                   <div className="w-6 h-6 rounded overflow-hidden flex-shrink-0">
                     <AvatarWithFallback src={p.author_avatar && !isPlaceholderUrl(p.author_avatar) ? p.author_avatar : null} alt="" fallbackLetter={p.author} className="w-full h-full object-cover" />
@@ -3652,7 +1097,7 @@ export default function App() {
               user={user}
               setUser={setUser}
               setToast={setToast}
-              onBack={() => setView('profile')}
+              onBack={() => navigate('/profile')}
               onSaveSuccess={() => loadUser()}
               onMountRefresh={loadUser}
             />
@@ -3674,15 +1119,15 @@ export default function App() {
               getAvatarUrl={getAvatarUrl}
               openLightbox={openLightbox}
               emojis={emojis}
-              onOpenProfile={() => { setSelectedUser(null); setView('profile'); }}
-              onOpenSettings={() => setView('settings')}
+              onOpenProfile={() => navigate('/profile')}
+              onOpenSettings={() => navigate('/settings')}
             />
           )}
 
           {view === 'feed' && activeNav === 'forum' && (
             <>
               <div className="flex items-center gap-2 text-[11px] text-[#484f58] font-bold uppercase tracking-wider">
-                <button onClick={() => { setActiveTab('all'); setView('feed'); }} className="hover:text-[var(--color-accent)] transition-colors">ФОРУМ</button>
+                <button onClick={() => navigate('/')} className="hover:text-[var(--color-accent)] transition-colors">ФОРУМ</button>
                 <ChevronRight size={12} />
                 <button onClick={() => { setActiveTab(activeTab); setView('feed'); }} className="hover:text-[var(--color-accent)] transition-colors">{getCategoryName(activeTab).toUpperCase()}</button>
               </div>
@@ -3709,37 +1154,41 @@ export default function App() {
           )}
 
           {activeNav === 'articles' && (
-            <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-8 text-center">
-              <FileText size={48} className="mx-auto text-[#484f58] mb-4" />
-              <h2 className="text-xl font-bold text-white mb-2">Статьи и гайды</h2>
-              <p className="text-sm text-[#8b949e]">Раздел находится в разработке.</p>
-              <button onClick={() => setActiveNav('forum')} className="mt-6 bg-[var(--color-accent)] text-black px-6 py-2 rounded-lg font-bold text-xs uppercase">Вернуться на форум</button>
-            </div>
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-black text-white">Статьи и гайды</h2>
+                {user && (
+                  <button onClick={() => navigate('/new')} className="text-xs font-bold text-[var(--color-accent)] hover:underline">
+                    Написать статью
+                  </button>
+                )}
+              </div>
+              <ArticlesPage articles={articles} loading={articlesLoading} onOpenArticle={openThread} onAuthorClick={openUserProfile} />
+            </>
           )}
 
           {activeNav === 'rules' && (
             <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl p-8 space-y-6">
               <h2 className="text-2xl font-black text-white italic border-b border-[#30363d] pb-4">ПРАВИЛА СООБЩЕСТВА</h2>
-              <div className="space-y-4 text-sm leading-relaxed">
-                <p className="text-[var(--color-accent)] font-bold">1. Общие положения</p>
-                <p>1.1. Будьте вежливы к коллегам по цеху. Оскорбления недопустимы.</p>
-                <p>1.2. Запрещен спам, флуд и любая несогласованная реклама.</p>
-                <p className="text-[var(--color-accent)] font-bold">2. Контент и Код</p>
-                <p>2.1. Весь выкладываемый код должен быть безопасен для пользователей.</p>
-                <p>2.2. При использовании чужого кода указывайте автора или лицензию.</p>
+              <div className="text-sm leading-relaxed">
+                {siteSettings.rules_content ? (
+                  <SimpleMarkdown emojis={emojis}>{siteSettings.rules_content}</SimpleMarkdown>
+                ) : (
+                  <p className="text-[#8b949e]">Правила ещё не опубликованы.</p>
+                )}
               </div>
-              <button onClick={() => setActiveNav('forum')} className="w-full bg-[#30363d] text-white py-2 rounded font-bold text-xs uppercase hover:bg-[var(--color-accent)] hover:text-black transition-all">Я ознакомлен с правилами</button>
+              <button onClick={() => navigate('/')} className="w-full bg-[#30363d] text-white py-2 rounded font-bold text-xs uppercase hover:bg-[var(--color-accent)] hover:text-black transition-all">Я ознакомлен с правилами</button>
             </div>
           )}
 
           {view === 'thread' && selectedThread && (
             <div className="space-y-5">
               <div className="flex items-center gap-2 text-[11px] text-[#484f58] font-bold uppercase tracking-wider">
-                <button onClick={() => { setActiveTab('all'); setView('feed'); }} className="hover:text-[var(--color-accent)] transition-colors">ФОРУМ</button>
+                <button onClick={() => navigate('/')} className="hover:text-[var(--color-accent)] transition-colors">ФОРУМ</button>
                 <ChevronRight size={12} />
-                <button onClick={() => { setActiveTab(selectedThread.category); setView('feed'); }} className="hover:text-[var(--color-accent)] transition-colors">{selectedThread.category}</button>
+                <button onClick={() => navigate(`/category/${selectedThread.category}`)} className="hover:text-[var(--color-accent)] transition-colors">{selectedThread.category}</button>
               </div>
-              <button onClick={() => setView('feed')} className="flex items-center gap-2 text-xs font-bold text-[#8b949e] hover:text-white mb-2 group transition-colors">
+              <button onClick={() => navigate('/')} className="flex items-center gap-2 text-xs font-bold text-[#8b949e] hover:text-white mb-2 group transition-colors">
                 <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> НАЗАД К ЛЕНТЕ
               </button>
 
@@ -3829,15 +1278,13 @@ export default function App() {
                   <ThreadActions
                     thread={selectedThread}
                     user={user}
-                    onEdit={() => {
-                      setEditingThreadId(selectedThread.id);
-                      setView('editor');
-                    }}
+                    onEdit={() => navigate(`/thread/${selectedThread.id}/edit`)}
                     onDelete={async () => {
                       if (!confirm('Удалить тему? Это действие нельзя отменить.')) return;
                       try {
                         await api.deletePost(selectedThread.id);
                         setView('feed');
+                        navigate('/');
                         setSelectedThread(null);
                         loadPosts();
                         loadStats();
@@ -3877,7 +1324,7 @@ export default function App() {
                   }, {});
                   const renderComment = (c, isNested = false) => {
                     const isAuthorOrMod = c.author_id === selectedThread?.author_id || c.rank === 'Модератор';
-                    const canEditComment = user && (c.author_id === user.id || user.is_admin || user.id === 1 || user.username === 'admin_dev');
+                    const canEditComment = user && (c.author_id === user.id || isAdmin(user));
                     const isEditing = editingCommentId === c.id;
                     const draft = isEditing ? editingCommentDraft : null;
                     return (
@@ -4103,7 +1550,7 @@ export default function App() {
             <div className="bg-[var(--bg-block)] border border-[#30363d] rounded-xl overflow-hidden shadow-2xl">
               <div className="p-4 border-b border-[#30363d] bg-[var(--bg-main)]/50 flex items-center justify-between">
                 <span className="text-xs font-black uppercase tracking-widest text-white">{editingThreadId ? 'Редактировать тему' : 'Новое обсуждение'}</span>
-                <button onClick={() => { setEditingThreadId(null); setView(editingThreadId ? 'thread' : 'feed'); }} className="text-[#484f58] hover:text-white transition-colors"><X size={20} /></button>
+                <button onClick={() => { const wasEditing = editingThreadId; setEditingThreadId(null); setView(wasEditing ? 'thread' : 'feed'); navigate(wasEditing ? `/thread/${wasEditing}` : '/'); }} aria-label="Закрыть редактор" className="text-[#484f58] hover:text-white transition-colors"><X size={20} /></button>
               </div>
               <form key={editingThreadId ? `edit-${editingThreadId}` : 'new'} onSubmit={handlePublish} className="p-6 md:p-8 space-y-4">
                 <input name="title" defaultValue={editingThreadId && selectedThread?.id === editingThreadId ? selectedThread.title : ''} className="w-full bg-[var(--bg-main)] border border-[#30363d] rounded-lg p-3 text-lg font-bold text-white focus:outline-none focus:border-[var(--color-accent)] transition-all" placeholder="Заголовок темы..." required />
@@ -4112,7 +1559,7 @@ export default function App() {
                   {newPostCoverImage ? (
                     <div className="relative rounded-xl overflow-hidden border border-[#30363d] bg-[var(--bg-main)]">
                       <img src={newPostCoverImage} alt="" className="w-full max-h-48 object-cover" />
-                      <button type="button" onClick={() => setNewPostCoverImage(null)} className="absolute top-2 right-2 w-8 h-8 bg-red-500/90 rounded-lg flex items-center justify-center text-white hover:bg-red-500"><X size={16} /></button>
+                      <button type="button" onClick={() => setNewPostCoverImage(null)} aria-label="Удалить обложку" className="absolute top-2 right-2 w-8 h-8 bg-red-500/90 rounded-lg flex items-center justify-center text-white hover:bg-red-500"><X size={16} /></button>
                     </div>
                   ) : (
                     <button type="button" onClick={() => newPostCoverInputRef.current?.click()} className="w-full h-24 rounded-xl border-2 border-dashed border-[#30363d] hover:border-[var(--color-accent)]/50 flex items-center justify-center gap-2 text-[#8b949e] hover:text-[var(--color-accent)] transition-all">
@@ -4183,13 +1630,13 @@ export default function App() {
                     {newPostImages.map((src, i) => (
                       <div key={i} className="relative flex-shrink-0">
                         <img src={src} alt="" className="max-h-24 rounded-lg border border-[#30363d] object-cover" />
-                        <button type="button" onClick={() => setNewPostImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400"><X size={12} /></button>
+                        <button type="button" onClick={() => setNewPostImages(prev => prev.filter((_, j) => j !== i))} aria-label="Удалить изображение" className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400"><X size={12} /></button>
                       </div>
                     ))}
                   </div>
                 )}
                 <div className="flex justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => { setEditingThreadId(null); setView(editingThreadId ? 'thread' : 'feed'); }} className="px-6 py-2 text-sm font-bold text-[#8b949e] hover:text-white transition-colors">ОТМЕНА</button>
+                  <button type="button" onClick={() => { const wasEditing = editingThreadId; setEditingThreadId(null); setView(wasEditing ? 'thread' : 'feed'); navigate(wasEditing ? `/thread/${wasEditing}` : '/'); }} className="px-6 py-2 text-sm font-bold text-[#8b949e] hover:text-white transition-colors">ОТМЕНА</button>
                   <button type="submit" className="bg-[var(--color-accent)] text-black px-8 py-2 rounded-lg font-black text-xs hover:bg-[color:var(--color-accent)]/90 transition-all shadow-lg shadow-[var(--color-accent)]/20 flex items-center gap-2">
                     {editingThreadId ? <><Save size={16} /> Сохранить изменения</> : 'ОПУБЛИКОВАТЬ'}
                   </button>
@@ -4198,7 +1645,7 @@ export default function App() {
             </div>
           )}
 
-          {view === 'admin' && (user?.is_admin || user?.id === 1 || user?.username === 'admin_dev') && (
+          {view === 'admin' && isAdmin(user) && (
             <AdminPanel
               adminTab={adminTab}
               setAdminTab={setAdminTab}
@@ -4208,7 +1655,7 @@ export default function App() {
               grantTrophyTarget={grantTrophyTarget}
               setGrantTrophyTarget={setGrantTrophyTarget}
               setToast={setToast}
-              setView={setView}
+              setView={(v) => { setView(v); if (v === 'feed') navigate('/'); }}
               getAvatarUrl={getAvatarUrl}
               categories={categories}
               loadCategories={loadCategories}
@@ -4231,7 +1678,7 @@ export default function App() {
               ) : (
               <>
               <div className="flex items-center gap-2 text-[11px] text-[#666] font-bold uppercase tracking-wider mb-6">
-                <button onClick={() => setView('feed')} className="hover:text-[var(--color-accent)] transition-colors">ФОРУМ</button>
+                <button onClick={() => navigate('/')} className="hover:text-[var(--color-accent)] transition-colors">ФОРУМ</button>
                 <ChevronRight size={12} />
                 <span className="text-[var(--color-accent)]">Профиль</span>
                 <ChevronRight size={12} />
@@ -4268,7 +1715,7 @@ export default function App() {
                           userId={displayUser?.id}
                           currentRank={displayUser?.rank}
                           currentColor={displayUser?.rank_color}
-                          isAdmin={user?.is_admin ?? (user?.id === 1 || user?.username === 'admin_dev')}
+                          isAdmin={isAdmin(user)}
                           loading={rankLoading}
                           glow
                           onRankChange={async (rank) => {
@@ -4303,7 +1750,7 @@ export default function App() {
                         <button onClick={() => setShowProfileEdit(true)} type="button" className="w-full mt-4 flex items-center justify-center gap-2 h-10 px-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg transition-all text-sm font-medium">
                           <Pencil size={16} className="w-4 h-4" /> Редактировать
                         </button>
-                        <button onClick={() => setView('settings')} type="button" className="w-full mt-2 flex items-center justify-center gap-2 h-10 px-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg transition-all text-sm font-medium">
+                        <button onClick={() => navigate('/settings')} type="button" className="w-full mt-2 flex items-center justify-center gap-2 h-10 px-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg transition-all text-sm font-medium">
                           <Settings size={16} className="w-4 h-4" /> Настройки
                         </button>
                       </>
@@ -4635,12 +2082,6 @@ export default function App() {
                           }} />
                         </form>
                         )}
-                        <div className="flex items-center gap-2 mb-4">
-                          <button className="text-[11px] text-[#888] px-2 py-1 rounded hover:bg-[#2a2a2a]">Найти сообщения</button>
-                          <ChevronDown size={12} />
-                          <button className="text-[11px] text-[#888] px-2 py-1 rounded hover:bg-[#2a2a2a]">Сортировать</button>
-                          <ChevronDown size={12} />
-                        </div>
                         {wallPosts.length === 0 ? (
                           <div className="py-16 text-center bg-[#181818]/50 rounded-xl border border-[#333] border-dashed">
                             <p className="text-[#888] text-sm">На стене пока нет ни одного сообщения</p>
@@ -4649,7 +2090,7 @@ export default function App() {
                           <div className="space-y-6">
                             {wallPosts.map(w => {
                               const isProfileOwner = (w.author_id === profileUserId) || (w.user_id === profileUserId && w.author_id === w.user_id);
-                              const canEditWallPost = user && (w.author_id === user.id || user.is_admin || user.id === 1 || user.username === 'admin_dev');
+                              const canEditWallPost = user && (w.author_id === user.id || isAdmin(user));
                               const isEditingWall = editingWallPostId === w.id;
                               const avatarSrc = isProfileOwner ? getWallAvatarUrl(selectedUser || user) : (w.author_avatar && !isPlaceholderUrl(w.author_avatar) ? w.author_avatar : null);
                               const rawImgList = w.image ? [w.image] : (Array.isArray(w.images) ? w.images : (w.attachments?.[0] ? [w.attachments[0]] : []));
@@ -4917,7 +2358,7 @@ export default function App() {
                           <MessageSquare size={14} className="text-[var(--color-accent)]" /> {selectedUser ? 'Темы пользователя' : 'Мои темы'}
                         </h4>
                         {(selectedUser ? selectedUserPosts : userPosts).length === 0 ? (
-                          <div className="py-12 text-center"><p className="text-[#888] text-sm">Нет созданных тем</p>{!selectedUser && <button onClick={() => setView('editor')} className="mt-2 text-[var(--color-accent)] text-sm hover:underline">Создать</button>}</div>
+                          <div className="py-12 text-center"><p className="text-[#888] text-sm">Нет созданных тем</p>{!selectedUser && <button onClick={() => navigate('/new')} className="mt-2 text-[var(--color-accent)] text-sm hover:underline">Создать</button>}</div>
                         ) : (
                           <div className="space-y-3">
                             {(selectedUser ? selectedUserPosts : userPosts).map(p => (
@@ -5100,7 +2541,7 @@ export default function App() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowAuth(false)}></div>
           <div className="relative bg-[var(--bg-block)] border border-[#30363d] w-full max-w-sm rounded-2xl p-8 shadow-2xl">
-            <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-[#484f58] hover:text-white transition-colors"><X size={20} /></button>
+            <button onClick={() => setShowAuth(false)} aria-label="Закрыть окно входа" className="absolute top-4 right-4 text-[#484f58] hover:text-white transition-colors"><X size={20} /></button>
 
             <div className="text-center mb-8">
               <div className="w-12 h-12 bg-[var(--color-accent)] mx-auto rounded-xl flex items-center justify-center text-black font-black text-2xl mb-4 shadow-xl shadow-[var(--color-accent)]/20">IT</div>
@@ -5148,22 +2589,22 @@ export default function App() {
       )}
 
       <footer className="fixed bottom-0 left-0 w-full bg-[var(--bg-main)]/95 backdrop-blur-md border-t border-[#30363d] h-16 flex md:hidden items-center justify-around z-50 px-6">
-        <button onClick={() => { setView('feed'); setActiveNav('forum'); }} className={`flex flex-col items-center gap-1 ${view === 'feed' && activeNav === 'forum' ? 'text-[var(--color-accent)]' : 'text-[#8b949e]'}`}>
+        <button onClick={() => navigate('/')} className={`flex flex-col items-center gap-1 ${view === 'feed' && activeNav === 'forum' ? 'text-[var(--color-accent)]' : 'text-[#8b949e]'}`}>
           <MessageSquare size={20} />
           <span className="text-[9px] font-black uppercase">Форум</span>
         </button>
         <button
-          onClick={() => { setView('messages'); setActiveChatUser(null); setChatHistory([]); }}
+          onClick={() => navigate('/messages')}
           className={`flex flex-col items-center gap-1 ${view === 'messages' ? '' : 'text-[#8b949e]'}`}
           style={view === 'messages' ? { color: messagesConfig.color || 'var(--color-accent)' } : {}}
         >
           {React.createElement(getIconComponent(messagesConfig?.icon || 'MessageCircle'), { size: 20 })}
           <span className="text-[9px] font-black uppercase">{messagesConfig.name}</span>
         </button>
-        <button onClick={() => user ? setView('editor') : (setShowAuth(true), setAuthMode('login'))} className="bg-[var(--color-accent)] text-black p-3 rounded-xl -mt-10 shadow-xl border-4 border-[#0d1117] transition-all active:scale-90">
+        <button onClick={() => user ? navigate('/new') : (setShowAuth(true), setAuthMode('login'))} aria-label="Создать тему" className="bg-[var(--color-accent)] text-black p-3 rounded-xl -mt-10 shadow-xl border-4 border-[#0d1117] transition-all active:scale-90">
           <PlusIcon size={24} />
         </button>
-        <button onClick={() => { setSelectedUser(null); setView('profile'); }} className={`flex flex-col items-center gap-1 ${view === 'profile' ? 'text-[var(--color-accent)]' : 'text-[#8b949e]'}`}>
+        <button onClick={() => navigate('/profile')} className={`flex flex-col items-center gap-1 ${view === 'profile' ? 'text-[var(--color-accent)]' : 'text-[#8b949e]'}`}>
           <User size={20} />
           <span className="text-[9px] font-black uppercase">Профиль</span>
         </button>

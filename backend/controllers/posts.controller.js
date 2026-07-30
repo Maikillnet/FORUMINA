@@ -1,13 +1,6 @@
 import db from '../db.js';
 import { formatTime } from '../utils/formatTime.js';
 
-function requireAdmin(req, res) {
-  if (!req.user) return res.status(401).json({ error: 'Не авторизован' });
-  const admin = db.users.getById(req.user.id);
-  if (!admin?.is_admin) return res.status(403).json({ error: 'Только администратор может управлять постами' });
-  return null;
-}
-
 export function list(req, res) {
   const { category, filter } = req.query;
   const posts = db.posts.list(category, filter);
@@ -21,7 +14,7 @@ export function list(req, res) {
 export function getById(req, res) {
   const post = db.posts.getById(req.params.id, req.user?.id);
   if (!post) return res.status(404).json({ error: 'Тема не найдена' });
-  const skipView = req.query.skip_view === '1' || req.headers['x-skip-view'] === '1';
+  const skipView = req.query.skip_view === '1';
   if (!skipView) {
     db.posts.incrementViews(req.params.id);
     post.views = (post.views || 0) + 1;
@@ -106,8 +99,6 @@ export function deletePost(req, res) {
 }
 
 export function listAdminPosts(req, res) {
-  const err = requireAdmin(req, res);
-  if (err) return;
   const list = db.posts.list('all');
   const page = parseInt(req.query.page, 10) || 1;
   const perPage = Math.min(parseInt(req.query.perPage, 10) || 20, 100);
@@ -122,8 +113,6 @@ export function listAdminPosts(req, res) {
 }
 
 export function deleteAdminPost(req, res) {
-  const err = requireAdmin(req, res);
-  if (err) return;
   const ok = db.posts.delete(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Пост не найден' });
   res.json({ success: true });

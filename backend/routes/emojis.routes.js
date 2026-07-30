@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/emojis.controller.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 
 const router = Router();
 
 router.get('/emojis', ctrl.getAll);
-router.post('/emojis', authMiddleware, ctrl.create);
-router.delete('/emojis/:id', authMiddleware, ctrl.remove);
+router.post('/emojis', requireAdmin, ctrl.create);
+router.delete('/emojis/:id', requireAdmin, ctrl.remove);
 
 export default router;
